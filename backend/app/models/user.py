@@ -22,25 +22,14 @@ class UserPermission(str, enum.Enum):
 class User(BaseModel):
     __tablename__ = "users"
 
-    username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     
-    role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
+    role = Column(Enum(UserRole, name="userrole"), default=UserRole.USER, nullable=False)
     permissions = Column(JSON, default=lambda: [UserPermission.READ.value, UserPermission.SEARCH.value])
     is_active = Column(Boolean, default=True, nullable=False)
-    is_superuser = Column(Boolean, default=False, nullable=False)
     
-    notification_preferences = Column(JSON, default=lambda: {
-        "email_notifications": True,
-        "search_completion": True
-    })
-    
-    max_search_history = Column(String(10), default="50")
-    save_search_history = Column(Boolean, default=True)
-    
-    full_name = Column(String(100), nullable=True)
-    phone = Column(String(50), nullable=True)
+    search_history_limit = Column(String(10), default="50")
     
     searches = relationship(
         "BusinessSearch",
@@ -50,18 +39,18 @@ class User(BaseModel):
     )
 
     def __repr__(self):
-        return f"<User {self.username}>"
+        return f"<User {self.email}>"
     
     @property
     def is_admin(self) -> bool:
-        return self.role == UserRole.ADMIN or self.is_superuser
+        return self.role == UserRole.ADMIN
     
     @property
     def is_manager(self) -> bool:
         return self.role == UserRole.MANAGER
     
     def has_permission(self, permission: UserPermission) -> bool:
-        if self.is_superuser:
+        if self.is_admin:
             return True
         return permission.value in self.permissions
     
@@ -75,8 +64,8 @@ class User(BaseModel):
         if self.permissions and permission.value in self.permissions:
             self.permissions.remove(permission.value)
     
-    def to_dict(self) -> dict:
-        data = super().to_dict()
+    async def to_dict(self) -> dict:
+        data = await super().to_dict()
         data.pop("hashed_password", None)
         data.update({
             "is_admin": self.is_admin,

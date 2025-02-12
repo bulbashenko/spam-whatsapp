@@ -34,6 +34,17 @@ celery_app.conf.update(
         "app.worker.tasks.*": {
             "rate_limit": "10/m"
         }
+    },
+    worker_pool="solo",  # Use solo pool for better async handling
+    worker_concurrency=1,  # Limit concurrency to prevent event loop conflicts
+    task_acks_late=True,  # Acknowledge tasks after completion
+    task_reject_on_worker_lost=True,  # Reject tasks if worker is lost
+    task_always_eager=False,  # Ensure tasks run asynchronously
+    broker_pool_limit=None,  # Disable connection pooling for Redis
+    broker_transport_options={
+        'visibility_timeout': 3600,  # 1 hour
+        'socket_timeout': 30,  # 30 seconds
+        'socket_connect_timeout': 30,
     }
 )
 

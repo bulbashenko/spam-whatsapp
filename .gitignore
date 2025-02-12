@@ -1,219 +1,70 @@
-# Python
+# Python cache files
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-*.spec
-pip-log.txt
-pip-delete-this-directory.txt
+backend/**/__pycache__/
+backend/app/**/__pycache__/
+*.pyc
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
-.coveragerc
+# Environment
+.env
+env/
+venv/
+.env.*
+!.env.example
 
-# Translations
-*.mo
-*.pot
+# Database
+backend/business_search.db
+*.db
+*.sqlite3
+*.db-journal
 
-# Django stuff:
+# Alembic
+backend/alembic/**/__pycache__/
+backend/alembic/**/*.pyc
+
+# Project specific
+backend/logs/
+logs/
 *.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
 
 # Celery
 celerybeat-schedule
 celerybeat.pid
 *.pid
-celerybeat-schedule.*
-celery.state
-celery.db
+backend/app/worker/*.pid
+backend/app/worker/*.state
 
 # Redis
 *.rdb
-redis.log
 dump.rdb
-appendonly.aof
 *.aof
 
-# Environment
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-.env.*
-!.env.example
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+frontend/static/build/
+frontend/static/**/*.min.css
+frontend/static/**/*.min.js
 
-# FastAPI
-.fastapi
-node_modules/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-*.sql
-*.psql
-*.postgresql
-*.mysql
-*.db-journal
-
-# Alembic
-alembic/*.py[cod]
-alembic/__pycache__/
-alembic/versions/__pycache__/
-alembic.ini
-
-# IDE settings
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-*.swn
+
+# OS
 .DS_Store
-.project
-.classpath
-.settings/
-*.sublime-workspace
-*.sublime-project
-
-# Logs
-logs/
-log/
-*.log.*
-logging.conf
-
-# Local development
-.local/
-local/
-docker-compose.override.yml
-docker-compose.local.yml
-
-# Temp files
-*.tmp
-*.temp
-*.bak
-*~
-.*.sw[po]
-*.orig
-*.rej
-
-# System Files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Media and Static files (customize as needed)
-media/
-static/
-uploads/
-assets/
-
-# Security
-*.pem
-*.key
-*.cert
-*.crt
-*.ca-bundle
-*.p12
-*.pfx
-
-# Worker files
-worker.state
-*.state
-*.sock
-
-# Configuration files
-config.local.yaml
-config.local.yml
-config.local.json
-settings.local.*
-
-# Poetry
-poetry.lock
-
-# Package managers
-yarn.lock
-package-lock.json
-Pipfile.lock
-
-# Backup files
-*.backup
-backup/
-backups/
-
-# Migration files (optional, depending on your needs)
-# */migrations/*.py
-# !*/migrations/__init__.py
-
-# Project specific (add your custom patterns)
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+# Testing and coverage
 .coverage
+coverage/
+.pytest_cache/
 htmlcov/
+
+# Temporary files
+*.bak
+*.tmp
+*~

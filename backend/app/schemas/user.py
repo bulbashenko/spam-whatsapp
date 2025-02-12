@@ -5,10 +5,10 @@ from app.models.user import UserRole
 
 
 class UserBase(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     role: Optional[UserRole] = UserRole.USER
     is_active: Optional[bool] = True
+    search_history_limit: Optional[str] = "50"
 
 
 class UserCreate(UserBase):
@@ -23,10 +23,10 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
     email: Optional[EmailStr] = None
     password: Optional[str] = Field(None, min_length=8)
     is_active: Optional[bool] = None
+    search_history_limit: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -39,10 +39,10 @@ class UserResponse(ResponseSchema, UserBase):
         json_schema_extra = {
             "example": {
                 "id": "d0093878-eb31-49a4-8174-5908fe4648f6",
-                "username": "johndoe",
                 "email": "john@example.com",
                 "role": "user",
                 "is_active": True,
+                "search_history_limit": "50",
                 "created_at": "2024-01-01T00:00:00",
                 "updated_at": "2024-01-01T00:00:00"
             }

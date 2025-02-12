@@ -31,17 +31,7 @@ async def register(
             detail="Email already registered"
         )
     
-    stmt = select(User).where(User.username == user_data.username)
-    result = await db.execute(stmt)
-    existing_user = result.scalar_one_or_none()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken"
-        )
-    
     user = User(
-        username=user_data.username,
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
         role=user_data.role,

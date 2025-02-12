@@ -12,7 +12,7 @@ class AuthManager {
         this.registerBtn = document.getElementById('register-btn');
         this.logoutBtn = document.getElementById('logout-btn');
         this.userInfo = document.getElementById('user-info');
-        this.username = document.getElementById('username');
+        this.userEmail = document.getElementById('user-email');
         
         this.initializeAuth();
         this.setupEventListeners();
@@ -43,7 +43,6 @@ class AuthManager {
 
         this.registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('register-username').value;
             const email = document.getElementById('register-email').value;
             const password = document.getElementById('register-password').value;
             const confirmPassword = document.getElementById('register-confirm-password').value;
@@ -54,7 +53,6 @@ class AuthManager {
             }
 
             const userData = {
-                username,
                 email,
                 password,
                 password_confirm: confirmPassword
@@ -156,7 +154,7 @@ class AuthManager {
             this.registerBtn.classList.add('hidden');
             this.logoutBtn.classList.remove('hidden');
             this.userInfo.classList.remove('hidden');
-            this.username.textContent = this.currentUser.username;
+            this.userEmail.textContent = this.currentUser.email;
             this.loginForm.classList.add('hidden');
             this.registerForm.classList.add('hidden');
         } else {
@@ -164,7 +162,7 @@ class AuthManager {
             this.registerBtn.classList.remove('hidden');
             this.logoutBtn.classList.add('hidden');
             this.userInfo.classList.add('hidden');
-            this.username.textContent = '';
+            this.userEmail.textContent = '';
         }
     }
 

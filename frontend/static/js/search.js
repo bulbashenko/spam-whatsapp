@@ -118,16 +118,17 @@ class SearchManager {
             
             if (search.status === 'completed') {
                 clearInterval(this.pollInterval);
-                this.progressText.textContent = 'Search completed!';
+                this.progressText.textContent = search.last_message || 'Search completed!';
                 await this.loadResults();
                 this.progressContainer.classList.add('hidden');
                 this.resultsContainer.classList.remove('hidden');
             } else if (search.status === 'failed') {
                 clearInterval(this.pollInterval);
-                this.showError('Search failed');
+                this.showError(search.error_message || 'Search failed');
             } else {
                 const progress = search.progress || 0;
-                this.updateProgress(progress, `Found ${search.results_count || 0} results...`);
+                const message = search.last_message || `Found ${search.results_count || 0} results...`;
+                this.updateProgress(progress, message);
             }
         } catch (error) {
             clearInterval(this.pollInterval);

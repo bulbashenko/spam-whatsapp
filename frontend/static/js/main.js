@@ -69,11 +69,9 @@ class App {
 
     async loadUserData(user) {
         try {
-            if (user.save_search_history) {
-                const searchStats = await search.getSearchStats();
-                if (searchStats.most_searched_types.length > 0) {
-                    this.displayRecentSearches(searchStats.most_searched_types);
-                }
+            const searchStats = await search.getSearchStats();
+            if (searchStats.most_searched_types.length > 0) {
+                this.displayRecentSearches(searchStats.most_searched_types);
             }
         } catch (error) {
             ui.showToast('Failed to load user data', 'error');

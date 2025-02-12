@@ -41,14 +41,6 @@ async def update_user_profile(
             )
         current_user.email = user_data.email
     
-    if user_data.username and user_data.username != current_user.username:
-        if db.query(User).filter(User.username == user_data.username).first():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken"
-            )
-        current_user.username = user_data.username
-    
     if user_data.password:
         current_user.hashed_password = get_password_hash(user_data.password)
     

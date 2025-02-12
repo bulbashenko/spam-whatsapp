@@ -61,7 +61,6 @@ class ApiClient {
 
     async register(userData) {
         const registerData = {
-            username: userData.username,
             email: userData.email,
             password: userData.password,
             password_confirm: userData.password_confirm

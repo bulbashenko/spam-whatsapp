@@ -33,6 +33,15 @@ class BusinessSearchResponse(ResponseSchema):
     error_message: Optional[str]
     search_params: Optional[Dict[str, Any]]
     user_id: str
+    progress: float = Field(0.0, ge=0.0, le=100.0)
+    last_updated: Optional[str] = None
+
+    @property
+    def last_message(self) -> Optional[str]:
+        """Get the last progress message if available."""
+        if self.search_params and isinstance(self.search_params, dict):
+            return self.search_params.get("last_message")
+        return None
 
 
 class BusinessDataBase(BaseModel):

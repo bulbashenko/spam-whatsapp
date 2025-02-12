@@ -45,8 +45,8 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
-app.mount("/static", StaticFiles(directory=Path("/root/bitbucket_fastapi_v1/frontend/static")), name="static")
-templates = Jinja2Templates(directory=Path("/root/bitbucket_fastapi_v1/frontend/templates"))
+app.mount("/static", StaticFiles(directory=Path("../frontend/static")), name="static")
+templates = Jinja2Templates(directory=Path("../frontend/templates"))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -68,4 +68,4 @@ app.include_router(users.router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8890, reload=True)
+    uvicorn.run("main:app", host="localhost", port=8890, reload=True)

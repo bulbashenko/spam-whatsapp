@@ -5,9 +5,20 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 
 engine = create_async_engine(
-    settings.SQLITE_DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///"),
+    settings.POSTGRES_DATABASE_URL,
     echo=False,
-    future=True
+    future=True,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800,  # Recycle connections after 30 minutes
+    connect_args={
+        "command_timeout": 60,  # 1 minute timeout for commands
+        "server_settings": {
+            "application_name": "business_search_worker"
+        }
+    }
 )
 
 AsyncSessionLocal = sessionmaker(
@@ -15,7 +26,8 @@ AsyncSessionLocal = sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
     autocommit=False,
-    autoflush=False
+    autoflush=False,
+    future=True
 )
 
 Base = declarative_base()

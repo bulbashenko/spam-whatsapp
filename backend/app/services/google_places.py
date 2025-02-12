@@ -12,18 +12,37 @@ class GooglePlacesService:
     def __init__(self):
         self.api_key = settings.GOOGLE_PLACES_API_KEY="REMOVED"
         self.base_url = "https://maps.googleapis.com/maps/api/place"
-        self.session = None
         self.retry_count = 3
         self.retry_delay = 1
+        self._session = None
+        
+    async def __aenter__(self):
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+        
+    async def close(self):
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+    
+    async def _ensure_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10),
+                connector=aiohttp.TCPConnector(limit=10, force_close=True)
+            )
+        return self._session
         
     async def _make_request(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
         params["key"] = self.api_key
         url = f"{self.base_url}/{endpoint}"
+        session = await self._ensure_session()
         
         for attempt in range(self.retry_count):
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, params=params, timeout=10) as response:
+                async with session.get(url, params=params) as response:
                         try:
                             data = await response.json()
                         except ValueError as e:
@@ -179,31 +198,26 @@ class GooglePlacesService:
         return processed_data
 
     async def get_location_predictions(self, input_text: str) -> List[Dict[str, str]]:
-        base_url = f"{self.base_url}/autocomplete/json"
         params = {
             "input": input_text,
             "types": "(cities)",
-            "language": "en",
-            "key": self.api_key
+            "language": "en"
         }
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(base_url, params=params) as response:
-                    data = await response.json()
-                    
-                    predictions = []
-                    for prediction in data.get("predictions", []):
-                        main_text = prediction.get("structured_formatting", {}).get("main_text", "")
-                        secondary_text = prediction.get("structured_formatting", {}).get("secondary_text", "")
-                        predictions.append({
-                            "place_id": prediction.get("place_id"),
-                            "description": prediction.get("description"),
-                            "main_text": main_text,
-                            "secondary_text": secondary_text
-                        })
-                    
-                    return predictions
+            data = await self._make_request("autocomplete/json", params)
+            predictions = []
+            for prediction in data.get("predictions", []):
+                main_text = prediction.get("structured_formatting", {}).get("main_text", "")
+                secondary_text = prediction.get("structured_formatting", {}).get("secondary_text", "")
+                predictions.append({
+                    "place_id": prediction.get("place_id"),
+                    "description": prediction.get("description"),
+                    "main_text": main_text,
+                    "secondary_text": secondary_text
+                })
+                
+            return predictions
             
         except Exception as e:
             logger.error(f"Autocomplete error: {str(e)}")

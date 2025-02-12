@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Enum, JSON, Index, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Enum, JSON, Index, ForeignKey
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
@@ -28,7 +28,7 @@ class BusinessSearch(BaseModel):
     max_price_level = Column(Float, nullable=True)
     open_now = Column(String(5), nullable=True)
     
-    status = Column(Enum(SearchStatus), default=SearchStatus.PENDING, nullable=False, index=True)
+    status = Column(Enum(SearchStatus, name="searchstatus"), default=SearchStatus.PENDING, nullable=False, index=True)
     results_count = Column(Float, default=0)
     error_message = Column(String(512), nullable=True)
     
@@ -37,7 +37,6 @@ class BusinessSearch(BaseModel):
     last_updated = Column(String(255), nullable=True)
     
     search_params = Column(JSON, nullable=True)
-    cached_results = Column(JSON, nullable=True)
     
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     user = relationship("User", back_populates="searches")
@@ -67,14 +66,11 @@ class BusinessSearch(BaseModel):
     def update_progress(self, progress: float, message: str = None) -> None:
         self.progress = min(max(progress, 0.0), 100.0)
         self.last_updated = datetime.utcnow().isoformat()
-        if message:
-            self.search_params = {
-                **(self.search_params or {}),
-                "last_message": message
-            }
+        if message and self.search_params is not None:
+            self.search_params["last_message"] = message
 
-    def to_dict(self) -> dict:
-        data = super().to_dict()
+    async def to_dict(self) -> dict:
+        data = await super().to_dict()
         data.update({
             "is_complete": self.is_complete,
             "has_error": self.has_error,
