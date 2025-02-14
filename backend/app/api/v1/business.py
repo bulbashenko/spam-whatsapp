@@ -28,9 +28,9 @@ router = APIRouter(prefix="/business", tags=["business"])
 
 @router.get("/locations/predict")
 async def predict_locations(query: str):
-    places_service = GooglePlacesService()
-    predictions = await places_service.get_location_predictions(query)
-    return {"predictions": predictions}
+    async with GooglePlacesService() as places_service:
+        predictions = await places_service.get_location_predictions(query)
+        return {"predictions": predictions}
 
 @router.post("/search", response_model=BusinessSearchResponse)
 async def create_search(
@@ -258,35 +258,35 @@ async def get_business_details(
             detail="Business not found"
         )
     
-    places_service = GooglePlacesService()
-    try:
-        details = await places_service.get_place_details(business.place_id)
-        if details and details.get("result"):
-            place_data = places_service.process_place_data(
-                details["result"], 
-                fallback_id=business.place_id
-            )
-            
-            for key, value in place_data.items():
-                if hasattr(business, key):
-                    setattr(business, key, value)
-            
-            business.weekday_text = place_data.get("weekday_text", [])
-            business.reviews = place_data.get("reviews", [])
-            business.photos = place_data.get("photos", [])
-            business.opening_hours = place_data.get("opening_hours", {})
-            business.raw_data = place_data.get("raw_data", {})
-            
-            business.updated_at = datetime.utcnow()
-            
-            db.add(business)
-            await db.commit()
-    except Exception as e:
-        logger.error(f"Error getting place details: {str(e)}")
-        if business.weekday_text is None:
-            business.weekday_text = []
-        if business.reviews is None:
-            business.reviews = []
+    async with GooglePlacesService() as places_service:
+        try:
+            details = await places_service.get_place_details(business.place_id)
+            if details and details.get("result"):
+                place_data = places_service.process_place_data(
+                    details["result"], 
+                    fallback_id=business.place_id
+                )
+                
+                for key, value in place_data.items():
+                    if hasattr(business, key):
+                        setattr(business, key, value)
+                
+                business.weekday_text = place_data.get("weekday_text", [])
+                business.reviews = place_data.get("reviews", [])
+                business.photos = place_data.get("photos", [])
+                business.opening_hours = place_data.get("opening_hours", {})
+                business.raw_data = place_data.get("raw_data", {})
+                
+                business.updated_at = datetime.utcnow()
+                
+                db.add(business)
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Error getting place details: {str(e)}")
+            if business.weekday_text is None:
+                business.weekday_text = []
+            if business.reviews is None:
+                business.reviews = []
     
     business_dict = await business.to_dict()
     business_dict.setdefault("weekday_text", [])
