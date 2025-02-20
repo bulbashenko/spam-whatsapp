@@ -26,12 +26,15 @@ class WhatsAppService:
             os.makedirs(self.base_profile_dir)
         self.qr_check_interval = 1
         self.qr_max_wait = 60
+        self._browser_pool = {}
+        self._browser_pool_lock = asyncio.Lock()
 
     def _get_profile_path(self, profile_name: str) -> str:
         """Returns Chrome profile path"""
         return os.path.join(self.base_profile_dir, f"profile-{profile_name}")
 
     async def _cleanup_chrome_processes(self):
+        """Cleanup stray Chrome processes"""
         import psutil
         
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
@@ -43,51 +46,62 @@ class WhatsAppService:
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
 
-    async def _init_chrome(self, profile_path: str, debug_prefix: str = "") -> uc.Chrome:
-        
-        await self._cleanup_chrome_processes()
+    async def _get_or_create_browser(self, profile_path: str) -> uc.Chrome:
+        """Get existing browser from pool or create new one"""
+        async with self._browser_pool_lock:
+            if profile_path in self._browser_pool:
+                browser = self._browser_pool[profile_path]
+                try:
+                    # Check if browser is still alive
+                    browser.current_url
+                    return browser
+                except:
+                    # Browser died, remove from pool
+                    del self._browser_pool[profile_path]
+            
+            # Create new browser
+            browser = await self._init_chrome(profile_path)
+            self._browser_pool[profile_path] = browser
+            return browser
+
+    async def _init_chrome(self, profile_path: str) -> uc.Chrome:
+        """Initialize Chrome instance with optimized settings"""
         loop = asyncio.get_event_loop()
         max_attempts = 3
-
+        
         for attempt in range(max_attempts):
             try:
-
                 def create_driver():
                     options = uc.ChromeOptions()
                     options.add_argument('--no-sandbox')
                     options.add_argument(f'--user-data-dir={profile_path}')
-                    
                     options.add_argument('--headless=new')
                     options.add_argument('--window-size=1920,1080')
-                    options.add_argument('--start-maximized')
-                    options.add_argument('--hide-scrollbars')
-                    options.add_argument('--force-device-scale-factor=1')
-                    
                     options.add_argument('--disable-dev-shm-usage')
                     options.add_argument('--disable-gpu')
                     options.add_argument('--disable-extensions')
-                    options.add_argument('--disable-software-rasterizer')
-                    options.add_argument('--disable-features=site-per-process')
-                    options.add_argument('--disable-web-security')
-                    options.add_argument('--allow-running-insecure-content')
                     
-                    options.add_argument('--disable-notifications')
-                    options.add_argument('--disable-popup-blocking')
-                    options.add_argument('--disable-blink-features=AutomationControlled')
+                    # Performance optimizations
+                    options.add_argument('--js-flags=--expose-gc')
+                    options.add_argument('--enable-precise-memory-info')
+                    options.add_argument('--disable-default-apps')
+                    options.add_argument('--no-first-run')
+                    options.add_argument('--no-default-browser-check')
+                    options.add_argument('--disable-background-networking')
+                    options.add_argument('--disable-background-timer-throttling')
+                    options.add_argument('--disable-client-side-phishing-detection')
+                    options.add_argument('--disable-component-update')
                     
                     debug_port = random.randint(9222, 9999)
                     options.add_argument(f'--remote-debugging-port={debug_port}')
                     
-                    try:
-                        driver = uc.Chrome(
-                            options=options,
-                            headless=True,
-                            use_subprocess=True,
-                            driver_executable_path=None
-                        )
-                        return driver
-                    except Exception as e:
-                        raise
+                    driver = uc.Chrome(
+                        options=options,
+                        headless=True,
+                        use_subprocess=True,
+                        driver_executable_path=None
+                    )
+                    return driver
 
                 driver = await loop.run_in_executor(None, create_driver)
                 return driver
@@ -108,7 +122,7 @@ class WhatsAppService:
     async def initialize_session(
         self, account: WhatsAppAccount, wait_time: int = 60
     ) -> Dict:
-        """Initializes WhatsApp session"""
+        """Initialize WhatsApp session with optimized QR handling"""
         result = {
             "success": False,
             "account_id": account.id,
@@ -127,10 +141,10 @@ class WhatsAppService:
             
             os.makedirs(profile_path, exist_ok=True)
             
-            driver = await self._init_chrome(profile_path, "Init")
+            driver = await self._init_chrome(profile_path)
             
             driver.get("https://web.whatsapp.com/")
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)  # Reduced initial wait
             
             start_time = time.time()
             qr_found = False
@@ -165,7 +179,7 @@ class WhatsAppService:
                                     }
                                 """, qr_canvas)
                                 
-                                await set_qr_code(account.id, qr_base64)
+                                await set_qr_code(account.id, qr_base64, expire=120)  # Reduced TTL
                                 
                                 saved_qr = await get_qr_code(account.id)
                                 if saved_qr:
@@ -176,19 +190,18 @@ class WhatsAppService:
                         
                         chat_list = driver.find_elements(By.CSS_SELECTOR, "#side, .two")
                         if chat_list:
-                            await asyncio.sleep(5)
+                            await asyncio.sleep(2)  # Reduced wait
                             await delete_qr_code(account.id)
                             
                             account.status = WhatsAppAccountStatus.ACTIVE
                             await self.db.commit()
                             result["success"] = True
-                            driver.quit()
                             return result
                             
                     except Exception as e:
                         pass
                         
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1)  # Reduced polling interval
                     
                 if not result["success"]:
                     import logging
@@ -261,7 +274,7 @@ class WhatsAppService:
         message_id: Optional[str] = None,
         wait_time: int = 60
     ) -> Dict:
-        """Sends a message via WhatsApp"""
+        """Send WhatsApp message using connection pooling"""
         message = None
         if message_id:
             result = await self.db.execute(
@@ -291,30 +304,36 @@ class WhatsAppService:
             return result
         
         try:
-            driver = await self._init_chrome(account.profile_path, "Send")
+            # Get or create browser from pool
+            driver = await self._get_or_create_browser(account.profile_path)
+            
             from urllib.parse import quote
             message_text = str(recipient.message)
             direct_url = (
                 f"https://web.whatsapp.com/send?phone={recipient.phone.replace('+', '')}"
                 f"&text={quote(message_text)}"
             )
-            driver.get(direct_url)
+            
+            # Check if already on correct page
+            current_url = driver.current_url
+            if not current_url.startswith("https://web.whatsapp.com/send"):
+                driver.get(direct_url)
             
             try:
                 send_button = WebDriverWait(driver, wait_time).until(
                     EC.element_to_be_clickable((By.XPATH, '//span[@data-icon="send"]'))
                 )
                 
-                time.sleep(random.uniform(0.5, 2.0))
+                await asyncio.sleep(random.uniform(0.5, 1.0))
                 send_button.click()
-                time.sleep(3)
+                await asyncio.sleep(1)
+                
                 result["success"] = True
                 message.status = WhatsAppMessageStatus.SENT
                 message.message_metadata = {"sent_at": str(datetime.now())}
                 await self.db.commit()
                 
             except TimeoutException:
-                import logging
                 logging.error(f"Failed to load chat or find send button for account {account.id}, recipient {recipient.phone}")
                 result["error"] = "Message sending failed"
                 account.status = WhatsAppAccountStatus.ERROR
@@ -323,20 +342,12 @@ class WhatsAppService:
                 await self.db.commit()
                 
         except Exception as e:
-            import logging
             logging.error(f"Message sending error for account {account.id}, recipient {recipient.phone}: {str(e)}")
             result["error"] = "Message sending failed"
             account.status = WhatsAppAccountStatus.ERROR
             message.status = WhatsAppMessageStatus.ERROR
             message.error_message = "Failed to send message"
             await self.db.commit()
-            
-        finally:
-            if 'driver' in locals():
-                try:
-                    driver.quit()
-                except:
-                    pass
         
         return result
 
@@ -347,21 +358,38 @@ class WhatsAppService:
         message_ids: Optional[List[str]] = None,
         wait_time: int = 60
     ) -> List[Dict]:
+        """Send bulk messages with optimized delays and connection reuse"""
         results = []
+        chunk_size = 5  # Process messages in chunks
         
-        for i, recipient in enumerate(recipients):
-            message_id = message_ids[i] if message_ids and i < len(message_ids) else None
-            result = await self.send_message(
-                account=account,
-                recipient=recipient,
-                message_id=message_id,
-                wait_time=wait_time
-            )
-            results.append(result)
+        for i in range(0, len(recipients), chunk_size):
+            chunk = recipients[i:i + chunk_size]
+            chunk_ids = message_ids[i:i + chunk_size] if message_ids else None
             
-            if len(recipients) > 1 and recipient != recipients[-1]:
-                delay = random.randint(5, 15)
-                time.sleep(delay)
+            # Process chunk concurrently
+            tasks = []
+            for j, recipient in enumerate(chunk):
+                message_id = chunk_ids[j] if chunk_ids and j < len(chunk_ids) else None
+                task = asyncio.create_task(self.send_message(
+                    account=account,
+                    recipient=recipient,
+                    message_id=message_id,
+                    wait_time=wait_time
+                ))
+                tasks.append(task)
+            
+            # Wait for chunk to complete with small delay between messages
+            chunk_results = []
+            for task in tasks:
+                result = await task
+                chunk_results.append(result)
+                await asyncio.sleep(random.uniform(1, 3))  # Reduced delay
+            
+            results.extend(chunk_results)
+            
+            # Larger delay between chunks
+            if i + chunk_size < len(recipients):
+                await asyncio.sleep(random.uniform(3, 5))
         
         return results
 
