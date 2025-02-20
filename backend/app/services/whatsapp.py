@@ -191,17 +191,23 @@ class WhatsAppService:
                     await asyncio.sleep(2)
                     
                 if not result["success"]:
-                    result["error"] = "Authorization timeout"
+                    import logging
+                    logging.error(f"Authorization timeout for account {account.id}")
+                    result["error"] = "Session initialization failed"
                     account.status = WhatsAppAccountStatus.ERROR
                     await self.db.commit()
                 
             except TimeoutException:
-                result["error"] = "Failed to get QR code"
+                import logging
+                logging.error(f"Failed to get QR code for account {account.id}")
+                result["error"] = "Session initialization failed"
                 account.status = WhatsAppAccountStatus.ERROR
                 await self.db.commit()
                 
         except Exception as e:
-            result["error"] = f"Session initialization error: {str(e)}"
+            import logging
+            logging.error(f"Session initialization error for account {account.id}: {str(e)}")
+            result["error"] = "Session initialization failed"
             account.status = WhatsAppAccountStatus.ERROR
             await self.db.commit()
             
@@ -308,18 +314,21 @@ class WhatsAppService:
                 await self.db.commit()
                 
             except TimeoutException:
-                result["error"] = "Failed to load chat or find send button"
+                import logging
+                logging.error(f"Failed to load chat or find send button for account {account.id}, recipient {recipient.phone}")
+                result["error"] = "Message sending failed"
                 account.status = WhatsAppAccountStatus.ERROR
                 message.status = WhatsAppMessageStatus.ERROR
-                message.error_message = result["error"]
+                message.error_message = "Failed to send message"
                 await self.db.commit()
                 
         except Exception as e:
-            error_msg = f"Message sending error: {str(e)}"
-            result["error"] = error_msg
+            import logging
+            logging.error(f"Message sending error for account {account.id}, recipient {recipient.phone}: {str(e)}")
+            result["error"] = "Message sending failed"
             account.status = WhatsAppAccountStatus.ERROR
             message.status = WhatsAppMessageStatus.ERROR
-            message.error_message = error_msg
+            message.error_message = "Failed to send message"
             await self.db.commit()
             
         finally:
@@ -357,17 +366,32 @@ class WhatsAppService:
         return results
 
     async def delete_account(self, account: WhatsAppAccount) -> bool:
+        """Deletes WhatsApp account and all associated data"""
         try:
+            # Delete all associated messages first
+            result = await self.db.execute(
+                select(WhatsAppMessage).where(WhatsAppMessage.account_id == account.id)
+            )
+            messages = result.scalars().all()
+            for message in messages:
+                await self.db.delete(message)
+            
+            # Delete Chrome profile if exists
             profile_path = self._get_profile_path(account.profile_name)
             if os.path.exists(profile_path):
                 import shutil
                 shutil.rmtree(profile_path)
 
+            # Delete QR code from Redis
             await delete_qr_code(account.id)
             
+            # Finally delete the account
             await self.db.delete(account)
             await self.db.commit()
             
             return True
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to delete account {account.id}: {str(e)}")
+            await self.db.rollback()
             return False

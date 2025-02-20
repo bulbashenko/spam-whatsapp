@@ -33,27 +33,26 @@ async def get_account_qr(
     db_session: AsyncSession = Depends(get_db)
 ):
     """Gets WhatsApp account QR code and status"""
-    print(f"[DEBUG] QR code request for account {account_id}")
+    import logging
     
     async with db_session as db:
         whatsapp_service = WhatsAppService(db)
         account = await whatsapp_service.get_account(account_id)
         
         if not account:
-            print(f"[DEBUG] Account {account_id} not found")
+            logging.warning(f"Account {account_id} not found")
             raise HTTPException(status_code=404, detail="Account not found")
         
         if account.user_id != current_user.id:
-            print(f"[DEBUG] Access denied to account {account_id}")
+            logging.warning(f"Access denied to account {account_id}")
             raise HTTPException(status_code=403, detail="Access denied")
         
         # Update account data to get current status
         await db.refresh(account)
-        print(f"[DEBUG] Account {account_id} status: {account.status}")
+        logging.info(f"Account {account_id} status: {account.status}")
         
         # If account is active, return status without QR code
         if account.status == WhatsAppAccountStatus.ACTIVE:
-            print(f"[DEBUG] Account {account_id} is active, QR code not needed")
             return {
                 "account_id": account_id,
                 "qr_code": None,
@@ -64,20 +63,16 @@ async def get_account_qr(
         
         # Get QR code from Redis
         qr_code = await get_qr_code(account_id)
-        print(f"[DEBUG] QR code for {account_id}: {'Received' if qr_code else 'Missing'}")
         
         # Determine status and message based on current state
         status_message = None
         if account.status == WhatsAppAccountStatus.PENDING:
             if not qr_code:
                 status_message = "Initializing WhatsApp..."
-                print(f"[DEBUG] {account_id}: Waiting for QR code generation")
             else:
                 status_message = "Waiting for QR code scan..."
-                print(f"[DEBUG] {account_id}: QR code ready for scanning")
         elif account.status == WhatsAppAccountStatus.ERROR:
             status_message = "WhatsApp initialization error"
-            print(f"[DEBUG] {account_id}: Initialization error")
         
         response = {
             "account_id": account_id,
@@ -88,7 +83,6 @@ async def get_account_qr(
             "metadata": account.account_metadata
         }
         
-        print(f"[DEBUG] Sending response for {account_id}: status={account.status}, QR={'Present' if qr_code else 'Missing'}")
         return response
 
 @router.get("/accounts/{account_id}/messages", response_model=List[WhatsAppMessageHistory])

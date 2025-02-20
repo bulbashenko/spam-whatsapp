@@ -70,7 +70,7 @@ accountForm.addEventListener('submit', async (e) => {
         accountForm.classList.add('hidden');
         await loadAccounts();
     } catch (error) {
-        showError(error);
+        console.error('Failed to create account:', error);
     }
 });
 
@@ -80,7 +80,7 @@ async function loadAccounts() {
         const accounts = await api.get('/whatsapp/accounts');
         renderAccounts(accounts);
     } catch (error) {
-        showError(error);
+        console.error('Failed to load accounts:', error);
     }
 }
 
@@ -213,7 +213,6 @@ async function checkQRCode(accountId) {
     } catch (error) {
         console.error('QR code check error:', error);
         clearPolling();
-        showError(error);
         closeModal(qrCodeModal);
     }
 }
@@ -272,7 +271,7 @@ window.initSession = async (accountId) => {
         // Set timeout
         modalTimeout = setTimeout(() => {
             clearPolling();
-            showError(new Error('QR code generation timeout'));
+            console.error('QR code generation timeout');
             closeModal(qrCodeModal);
         }, MODAL_TIMEOUT);
 
@@ -283,7 +282,9 @@ window.initSession = async (accountId) => {
 
         if (response.error) {
             clearPolling();
-            throw new Error(response.error);
+            console.error('Session initialization failed:', response.error);
+            closeModal(qrCodeModal);
+            return;
         }
 
         // If QR code came in initialization response, show it
@@ -296,8 +297,8 @@ window.initSession = async (accountId) => {
         }
 
     } catch (error) {
+        console.error('Session initialization error:', error);
         clearPolling();
-        showError(error);
         closeModal(qrCodeModal);
     }
 };
@@ -324,7 +325,7 @@ window.showMessageHistory = async (accountId) => {
         messageHistoryModal.style.display = 'block';
         document.body.style.overflow = 'hidden';
     } catch (error) {
-        showError(error);
+        console.error('Failed to load message history:', error);
     }
 };
 
@@ -363,7 +364,7 @@ function startMessageStatusPolling(taskId) {
                 if (status.result?.success) {
                     showToast('Message sent successfully', 'success');
                 } else {
-                    showError(new Error(status.error || 'Failed to send message'));
+                    console.error('Message sending failed:', status.error || 'Unknown error');
                 }
                 
                 // Refresh message history if modal is open
@@ -405,7 +406,7 @@ sendMessageForm.addEventListener('submit', async (e) => {
             throw new Error('Invalid response from server');
         }
     } catch (error) {
-        showError(error);
+        console.error('Failed to send message:', error);
     }
 });
 
@@ -470,7 +471,7 @@ window.deleteAccount = async (accountId) => {
         showToast('Account successfully deleted', 'success');
         await loadAccounts();
     } catch (error) {
-        showError(error);
+        console.error('Failed to delete account:', error);
     }
 };
 
