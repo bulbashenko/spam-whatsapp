@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 import enum
 from typing import List
 from .base import BaseModel
+from .whatsapp import WhatsAppAccount
 
 
 class UserRole(str, enum.Enum):
@@ -63,6 +64,13 @@ class User(BaseModel):
     def remove_permission(self, permission: UserPermission) -> None:
         if self.permissions and permission.value in self.permissions:
             self.permissions.remove(permission.value)
+    
+    whatsapp_accounts = relationship(
+        "WhatsAppAccount",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="desc(WhatsAppAccount.created_at)"
+    )
     
     async def to_dict(self) -> dict:
         data = await super().to_dict()

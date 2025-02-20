@@ -15,6 +15,8 @@
                 <span id="user-info" class="hidden">
                     Welcome, <span id="user-email"></span>
                 </span>
+                <button id="search-nav-btn" class="btn active"><i class="fas fa-search"></i> Search</button>
+                <button id="whatsapp-nav-btn" class="btn"><i class="fab fa-whatsapp"></i> WhatsApp</button>
                 <button id="login-btn" class="btn"><i class="fas fa-sign-in-alt"></i> Login</button>
                 <button id="register-btn" class="btn"><i class="fas fa-user-plus"></i> Register</button>
                 <button id="logout-btn" class="btn hidden"><i class="fas fa-sign-out-alt"></i> Logout</button>
@@ -122,10 +124,128 @@
     <div id="toast-container"></div>
 
 
+        <div id="whatsapp-section" class="container hidden">
+            <div class="section-header">
+                <h2><i class="fab fa-whatsapp"></i> WhatsApp Accounts</h2>
+                <button id="add-account-btn" class="btn"><i class="fas fa-plus"></i> Add Account</button>
+            </div>
+
+            <form id="account-form" class="hidden">
+                <h3>New WhatsApp Account</h3>
+                <div class="form-group">
+                    <label for="profile-name">Profile Name:</label>
+                    <input type="text" id="profile-name" required 
+                           placeholder="e.g., Main Account">
+                </div>
+                <div class="form-group">
+                    <label for="description">Description:</label>
+                    <input type="text" id="description" 
+                           placeholder="Optional description">
+                </div>
+                <button type="submit" class="btn"><i class="fas fa-save"></i> Save Account</button>
+            </form>
+
+            <div id="accounts-container">
+                <div class="table-controls">
+                    <div class="search-filter">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="accounts-search" placeholder="Filter accounts...">
+                    </div>
+                </div>
+                <table id="accounts-table">
+                    <thead>
+                        <tr>
+                            <th>Profile Name</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Last Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accounts-body"></tbody>
+                </table>
+            </div>
+
+            <!-- Modal for sending messages -->
+            <div id="send-message-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h3>Send WhatsApp Message</h3>
+                    <form id="send-message-form">
+                        <div class="form-group">
+                            <label for="recipient-phone">Phone Number:</label>
+                            <input type="text" id="recipient-phone" required 
+                                   placeholder="e.g., +1234567890">
+                        </div>
+                        <div class="form-group">
+                            <label for="message-text">Message:</label>
+                            <textarea id="message-text" required 
+                                    placeholder="Enter your message"></textarea>
+                        </div>
+                        <div class="modal-buttons">
+                            <button type="button" class="btn cancel-btn">Cancel</button>
+                            <button type="submit" class="btn"><i class="fas fa-paper-plane"></i> Send</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modal for message history -->
+            <div id="message-history-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h3>Message History</h3>
+                    <div class="table-container">
+                        <table class="message-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Recipient</th>
+                                    <th>Message</th>
+                                    <th>Status</th>
+                                    <th>Timestamp</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody id="message-history-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn cancel-btn">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal for QR code -->
+            <div id="qr-code-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h3>WhatsApp Initialization</h3>
+                    <div class="qr-status">Status: Waiting...</div>
+                    <div class="qr-code-container">
+                        <img id="qr-code-image" src="" alt="QR Code">
+                        <div class="loading-indicator">
+                            <i class="fas fa-spinner fa-spin"></i> Initializing...
+                        </div>
+                    </div>
+                    <div class="qr-instructions">
+                        <p>To connect WhatsApp, follow these steps:</p>
+                        <ol>
+                            <li>Open WhatsApp on your phone</li>
+                            <li>Tap Menu or Settings and select WhatsApp Web</li>
+                            <li>Point your phone's camera at the QR code</li>
+                            <li>Wait for chats to load</li>
+                        </ol>
+                        <p class="note">Important: Do not close this window until chats are fully loaded</p>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn cancel-btn">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     <script type="module" src="/static/js/api.js"></script>
     <script type="module" src="/static/js/auth.js"></script>
     <script type="module" src="/static/js/search.js"></script>
     <script type="module" src="/static/js/ui.js"></script>
+    <script type="module" src="/static/js/whatsapp.js"></script>
     <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

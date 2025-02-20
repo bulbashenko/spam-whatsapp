@@ -2,7 +2,8 @@ import asyncio
 from celery import Task
 from typing import Dict, Any, List
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+import json
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,9 @@ from app.worker.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.models import BusinessSearch, SearchStatus, BusinessData
 from app.services.google_places import GooglePlacesService
+from app.services.whatsapp import WhatsAppService
+from app.schemas.whatsapp import WhatsAppMessageRecipient
+from app.models.whatsapp import WhatsAppAccount, WhatsAppMessage, WhatsAppMessageStatus
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +52,144 @@ class DatabaseTask(Task):
             finally:
                 self._loop = None
 
+# WhatsApp Tasks
 @celery_app.task(bind=True, base=DatabaseTask, max_retries=3)
-def process_business_search(self, search_id: str, user_id: str):
-    search = None
+def send_whatsapp_message(
+    self,
+    account_id: str,
+    recipient_data: Dict[str, Any],
+    message_id: str,
+    wait_time: int = 60
+) -> Dict[str, Any]:
+    """
+    Celery task to send a single WhatsApp message
+    """
     try:
         loop = self.get_loop()
+        
+        async def _send():
+            db = await self.get_db()
+            service = WhatsAppService(db)
+            
+            # Get account and message
+            account = await service.get_account(account_id)
+            if not account:
+                raise ValueError(f"WhatsApp account {account_id} not found")
+            
+            # Ensure message is a string in recipient data
+            if isinstance(recipient_data.get('message'), (list, tuple)):
+                recipient_data['message'] = ' '.join(map(str, recipient_data['message']))
+            elif recipient_data.get('message') is not None:
+                recipient_data['message'] = str(recipient_data['message'])
+            
+            # Create recipient object
+            recipient = WhatsAppMessageRecipient(**recipient_data)
+            
+            # Send message using existing message record
+            send_result = await service.send_message(
+                account=account,
+                recipient=recipient,
+                message_id=message_id,
+                wait_time=wait_time
+            )
+            return send_result
+            
+        result = loop.run_until_complete(_send())
+        loop.run_until_complete(self.cleanup_db())
+        return result
+        
+    except Exception as e:
+        try:
+            async def update_status():
+                db = await self.get_db()
+                result = await db.execute(
+                    select(WhatsAppMessage).where(WhatsAppMessage.id == message_id)
+                )
+                message = result.scalar_one_or_none()
+                if message:
+                    message.status = WhatsAppMessageStatus.IN_QUEUE
+                    message.error_message = None
+                    await db.commit()
+            loop.run_until_complete(update_status())
+        except Exception:
+            pass
+        self.retry(exc=e, countdown=30)
+
+@celery_app.task(bind=True, base=DatabaseTask, max_retries=3)
+def send_bulk_whatsapp_messages(
+    self,
+    account_id: str,
+    recipients_data: List[Dict[str, Any]],
+    message_ids: List[str],
+    wait_time: int = 60
+) -> List[Dict[str, Any]]:
+    """
+    Celery task to send multiple WhatsApp messages
+    """
+    try:
+        loop = self.get_loop()
+        
+        async def _send_bulk():
+            db = await self.get_db()
+            service = WhatsAppService(db)
+            
+            # Get account
+            account = await service.get_account(account_id)
+            if not account:
+                raise ValueError(f"WhatsApp account {account_id} not found")
+            
+            # Process recipient data and create recipient objects
+            processed_recipients = []
+            for data in recipients_data:
+                # Ensure message is a string
+                if isinstance(data.get('message'), (list, tuple)):
+                    data['message'] = ' '.join(map(str, data['message']))
+                elif data.get('message') is not None:
+                    data['message'] = str(data['message'])
+                processed_recipients.append(WhatsAppMessageRecipient(**data))
+            
+            # Send messages with existing message IDs
+            results = await service.send_bulk_messages(
+                account=account,
+                recipients=processed_recipients,
+                message_ids=message_ids,
+                wait_time=wait_time
+            )
+            return results
+            
+        results = loop.run_until_complete(_send_bulk())
+        loop.run_until_complete(self.cleanup_db())
+        return results
+        
+    except Exception as e:
+        try:
+            async def update_statuses():
+                db = await self.get_db()
+                for message_id in message_ids:
+                    result = await db.execute(
+                        select(WhatsAppMessage).where(WhatsAppMessage.id == message_id)
+                    )
+                    message = result.scalar_one_or_none()
+                    if message:
+                        message.status = WhatsAppMessageStatus.IN_QUEUE
+                        message.error_message = None
+                await db.commit()
+            loop.run_until_complete(update_statuses())
+        except Exception:
+            pass
+        self.retry(exc=e, countdown=30)
+
+@celery_app.task(bind=True, base=DatabaseTask, max_retries=3)
+def process_business_search(self, search_id: str, user_id: str):
+    """
+    Celery task to process business search
+    """
+    search = None
+    loop = None
+    try:
+        # Initialize loop at the start and set it as the current event loop
+        loop = self.get_loop()
+        asyncio.set_event_loop(loop)
         
         async def _process():
             nonlocal search
@@ -222,31 +359,39 @@ def process_business_search(self, search_id: str, user_id: str):
     except Exception as e:
         logger.error(f"Task error: {str(e)}")
         try:
+            loop = self.get_loop()
             if search:
                 async def update_failed_status():
-                    db = await self.get_db()
                     try:
+                        db = await self.get_db()
                         search.status = SearchStatus.FAILED
                         await db.commit()
+                        await self.cleanup_db()
                     except Exception as inner_e:
                         logger.error(f"Failed to update search status: {str(inner_e)}")
                 
-                self.get_loop().run_until_complete(update_failed_status())
+                loop.run_until_complete(update_failed_status())
         except Exception as cleanup_e:
             logger.error(f"Error during cleanup: {str(cleanup_e)}")
         finally:
             self.cleanup()
-        self.retry(exc=e, countdown=60)
+            
+        # If search is None, we should log this specific case
+        if search is None:
+            logger.error("Search object was None when processing business search")
+            
+        self.retry(exc=e, countdown=20)
 
 @celery_app.task(bind=True, base=DatabaseTask)
-def cleanup_old_searches(self, days: int = 30):
+def cleanup_old_searches(self, days: int = 7):
+    """
+    Celery task to cleanup old searches
+    """
     try:
         loop = self.get_loop()
         
         async def _cleanup():
             async with AsyncSessionLocal() as db:
-                from datetime import datetime, timedelta
-                
                 cutoff_date = datetime.utcnow() - timedelta(days=days)
                 
                 result = await db.execute(

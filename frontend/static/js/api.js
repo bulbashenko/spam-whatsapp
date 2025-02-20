@@ -1,4 +1,5 @@
-class ApiClient {
+// Create and export a single instance of ApiClient
+const api = new class ApiClient {
     constructor() {
         this.baseUrl = '/api/v1';
         this.token = localStorage.getItem('token');
@@ -155,7 +156,56 @@ class ApiClient {
     async getBusinessDetails(businessId) {
         return this.request(`/business/details/${businessId}`);
     }
+
+    // WhatsApp API Methods
+    // Generic HTTP methods
+    async get(endpoint) {
+        return this.request(endpoint);
+    }
+
+    async post(endpoint, data) {
+        return this.request(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    }
+
+    // WhatsApp methods
+    async getWhatsAppAccounts() {
+        return this.get('/whatsapp/accounts');
+    }
+
+    async createWhatsAppAccount(accountData) {
+        return this.post('/whatsapp/accounts', accountData);
+    }
+
+    async updateWhatsAppAccount(accountId, accountData) {
+        return this.request(`/whatsapp/accounts/${accountId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(accountData)
+        });
+    }
+
+    async deleteWhatsAppAccount(accountId) {
+        return this.request(`/whatsapp/accounts/${accountId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    async initWhatsAppSession(accountId, options = {}) {
+        return this.request(`/whatsapp/accounts/${accountId}/init`, {
+            method: 'POST',
+            body: JSON.stringify(options)
+        });
+    }
+
+    async sendWhatsAppMessage(accountId, messageData) {
+        return this.request(`/whatsapp/accounts/${accountId}/send`, {
+            method: 'POST',
+            body: JSON.stringify(messageData)
+        });
+    }
 }
 
-const api = new ApiClient();
-export default api;
+// Export the singleton instance
+export { api };

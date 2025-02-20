@@ -14,7 +14,7 @@ sys.path.append(backend_dir)
 # Import models and settings
 from app.core.config import settings
 from app.core.database import Base
-from app.models import user, business_data, business_search  # Import all models
+from app.models import user, business_data, business_search, whatsapp  # Import all models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

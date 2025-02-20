@@ -25,6 +25,7 @@ backend/alembic/**/*.pyc
 # Project specific
 backend/logs/
 logs/
+backend/chrome-profiles/
 *.log
 
 # Celery

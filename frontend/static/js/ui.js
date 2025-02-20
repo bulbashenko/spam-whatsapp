@@ -148,4 +148,9 @@ class UIManager {
 }
 
 const ui = new UIManager();
+
+// Named exports for commonly used UI functions
+export const showToast = (message, type = 'info', duration = 3000) => ui.showToast(message, type, duration);
+export const showError = (error) => ui.showToast(error.message || error, 'error', 5000);
+
 export default ui;

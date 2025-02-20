@@ -11,7 +11,7 @@ import logging
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.models import * 
-from app.api.v1 import auth, business, users
+from app.api.v1 import auth_router, business_router, users_router, whatsapp_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,9 +62,10 @@ async def global_exception_handler(request, exc):
     )
 
 
-app.include_router(auth.router, prefix=settings.API_V1_STR)
-app.include_router(business.router, prefix=settings.API_V1_STR)
-app.include_router(users.router, prefix=settings.API_V1_STR)
+app.include_router(auth_router, prefix=settings.API_V1_STR)
+app.include_router(business_router, prefix=settings.API_V1_STR)
+app.include_router(users_router, prefix=settings.API_V1_STR)
+app.include_router(whatsapp_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     import uvicorn

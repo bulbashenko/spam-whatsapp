@@ -22,6 +22,9 @@ class BaseModel(Base):
                 value = getattr(self, column.name)
                 if isinstance(value, datetime):
                     result[column.name] = value.isoformat()
+                elif column.name == 'status' and hasattr(value, 'value'):
+                    # Handle enum status values
+                    result[column.name] = value.value.upper()
                 else:
                     result[column.name] = value
             except Exception as e:

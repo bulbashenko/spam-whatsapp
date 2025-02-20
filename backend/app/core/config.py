@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     ELASTICSEARCH_HOST: str = "localhost"
     ELASTICSEARCH_PORT: int = 9200
     
+    # Chrome profiles settings
+    CHROME_PROFILES_DIR: str = "/opt/chrome-profiles"
+    
     class Config:
         case_sensitive = True
         env_file = ".env"
