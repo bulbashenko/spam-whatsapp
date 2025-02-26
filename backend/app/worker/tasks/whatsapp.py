@@ -28,6 +28,7 @@ def send_whatsapp_message(
             # Get account and message
             account = await service.get_account(account_id)
             if not account:
+                logger.error(f"WhatsApp account {account_id} not found")
                 raise ValueError(f"WhatsApp account {account_id} not found")
             
             # Ensure message is a string in recipient data
@@ -50,6 +51,7 @@ def send_whatsapp_message(
     try:
         return self.run_async(_send())
     except Exception as e:
+        logger.error(f"Error sending WhatsApp message: {str(e)}")
         async def update_status():
             async with self.db_session() as db:
                 result = await db.execute(
@@ -57,14 +59,14 @@ def send_whatsapp_message(
                 )
                 message = result.scalar_one_or_none()
                 if message:
-                    message.status = WhatsAppMessageStatus.PENDING
-                    message.error_message = None
+                    message.status = WhatsAppMessageStatus.ERROR
+                    message.error_message = str(e)
                     await db.commit()
 
         try:
             self.run_async(update_status())
-        except Exception:
-            pass
+        except Exception as inner_e:
+            logger.error(f"Failed to update message status: {str(inner_e)}")
         
         self.retry(exc=e, countdown=30)
 
@@ -86,6 +88,7 @@ def send_bulk_whatsapp_messages(
             # Get account
             account = await service.get_account(account_id)
             if not account:
+                logger.error(f"WhatsApp account {account_id} not found")
                 raise ValueError(f"WhatsApp account {account_id} not found")
             
             # Process recipient data and create recipient objects
@@ -109,6 +112,7 @@ def send_bulk_whatsapp_messages(
     try:
         return self.run_async(_send_bulk())
     except Exception as e:
+        logger.error(f"Error sending bulk WhatsApp messages: {str(e)}")
         async def update_statuses():
             async with self.db_session() as db:
                 for message_id in message_ids:
@@ -117,13 +121,13 @@ def send_bulk_whatsapp_messages(
                     )
                     message = result.scalar_one_or_none()
                     if message:
-                        message.status = WhatsAppMessageStatus.PENDING
-                        message.error_message = None
+                        message.status = WhatsAppMessageStatus.ERROR
+                        message.error_message = str(e)
                 await db.commit()
 
         try:
             self.run_async(update_statuses())
-        except Exception:
-            pass
+        except Exception as inner_e:
+            logger.error(f"Failed to update message statuses: {str(inner_e)}")
         
         self.retry(exc=e, countdown=30)

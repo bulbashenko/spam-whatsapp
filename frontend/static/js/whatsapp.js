@@ -312,8 +312,43 @@ window.showSendMessage = (accountId) => {
     sendMessageModal.style.display = 'block';
     sendMessageModal.classList.remove('hidden');
     
+    // Reset mode to single
+    const singleBtn = document.querySelector('.mode-btn[data-mode="single"]');
+    const bulkBtn = document.querySelector('.mode-btn[data-mode="bulk"]');
+    const singleRecipient = document.getElementById('single-recipient');
+    const bulkRecipients = document.getElementById('bulk-recipients');
+    
+    singleBtn.classList.add('active');
+    bulkBtn.classList.remove('active');
+    singleRecipient.classList.remove('hidden');
+    bulkRecipients.classList.add('hidden');
+    
     document.getElementById('recipient-phone').focus();
 };
+
+// Message Mode Toggle
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        const singleRecipient = document.getElementById('single-recipient');
+        const bulkRecipients = document.getElementById('bulk-recipients');
+        
+        // Update button states
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Show/hide appropriate input
+        if (mode === 'single') {
+            singleRecipient.classList.remove('hidden');
+            bulkRecipients.classList.add('hidden');
+            document.getElementById('recipient-phone').focus();
+        } else {
+            singleRecipient.classList.add('hidden');
+            bulkRecipients.classList.remove('hidden');
+            document.getElementById('bulk-phones').focus();
+        }
+    });
+});
 
 // Message History
 window.showMessageHistory = async (accountId) => {
@@ -380,33 +415,72 @@ function startMessageStatusPolling(taskId) {
     messageStatusPolls.set(taskId, intervalId);
 }
 
+// Parse bulk phone numbers
+function parseBulkPhoneNumbers(text) {
+    return text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(phone => ({
+            phone: phone,
+            message: document.getElementById('message-text').value
+        }));
+}
+
 // Handle message form submission
 sendMessageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const accountId = sendMessageForm.dataset.accountId;
-    const phone = document.getElementById('recipient-phone').value;
     const message = document.getElementById('message-text').value;
+    const mode = document.querySelector('.mode-btn.active').dataset.mode;
+    
+    if (!message.trim()) {
+        showToast('Please enter a message', 'error');
+        return;
+    }
 
     try {
+        let recipients;
+        if (mode === 'single') {
+            const phone = document.getElementById('recipient-phone').value;
+            if (!phone.trim()) {
+                showToast('Please enter a phone number', 'error');
+                return;
+            }
+            recipients = [{ phone, message }];
+        } else {
+            const bulkPhones = document.getElementById('bulk-phones').value;
+            if (!bulkPhones.trim()) {
+                showToast('Please enter phone numbers', 'error');
+                return;
+            }
+            recipients = parseBulkPhoneNumbers(bulkPhones);
+            if (recipients.length === 0) {
+                showToast('No valid phone numbers found', 'error');
+                return;
+            }
+        }
+
         const response = await api.post(`/whatsapp/accounts/${accountId}/send`, {
             account_id: accountId,
-            recipients: [{
-                phone: phone,
-                message: message
-            }],
+            recipients: recipients,
             wait_time: 60
         });
 
         if (response?.task_id) {
-            showToast('Message queued for sending', 'info');
+            const recipientCount = recipients.length;
+            showToast(
+                `${recipientCount} message${recipientCount > 1 ? 's' : ''} queued for sending`,
+                'info'
+            );
             closeModal(sendMessageModal);
-            currentAccountId = accountId; // Store account ID for status updates
+            currentAccountId = accountId;
             startMessageStatusPolling(response.task_id);
         } else {
             throw new Error('Invalid response from server');
         }
     } catch (error) {
         console.error('Failed to send message:', error);
+        showToast('Failed to send message: ' + error.message, 'error');
     }
 });
 

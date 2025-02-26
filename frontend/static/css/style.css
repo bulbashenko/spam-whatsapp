@@ -734,7 +734,7 @@ td .btn i {
 }
 
 /* Message Form Styles */
-#message-text {
+#message-text, #bulk-phones {
     width: 100%;
     min-height: 120px;
     padding: 0.875rem 1rem;
@@ -744,6 +744,59 @@ td .btn i {
     transition: all 0.3s ease;
     background-color: #f8f9fa;
     resize: vertical;
+}
+
+/* Message Mode Toggle */
+.message-mode-toggle {
+    margin-bottom: 1.5rem;
+}
+
+.toggle-buttons {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 0.75rem;
+    border: 2px solid #e0e0e0;
+    background: #f8f9fa;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    color: #666;
+}
+
+.mode-btn.active {
+    background: #25D366;
+    color: white;
+    border-color: #25D366;
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2);
+}
+
+.mode-btn:hover:not(.active) {
+    border-color: #25D366;
+    color: #25D366;
+}
+
+/* Recipient Input Sections */
+.recipient-input {
+    margin-bottom: 1.5rem;
+}
+
+.help-text {
+    display: block;
+    margin-top: 0.5rem;
+    color: #666;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+#bulk-phones {
+    font-family: monospace;
+    min-height: 150px;
 }
 
 #message-text:focus {

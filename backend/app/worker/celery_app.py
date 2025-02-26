@@ -1,5 +1,8 @@
 from celery import Celery
+import logging
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "business_search_worker",
@@ -32,8 +35,8 @@ celery_app.conf.update(
             "rate_limit": "10/m"
         }
     },
-    worker_pool="prefork",  # Changed from 'solo' to 'prefork' for better process isolation
-    worker_concurrency=2,   # Increased from 1 to 2 for better throughput
+    worker_pool="solo",  # Changed to solo to avoid event loop issues with asyncio
+    worker_concurrency=1,   # Reduced to 1 to avoid race conditions with db connections
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_always_eager=False,

@@ -171,19 +171,47 @@
                 <div class="modal-content">
                     <h3>Send WhatsApp Message</h3>
                     <form id="send-message-form">
-                        <div class="form-group">
-                            <label for="recipient-phone">Phone Number:</label>
-                            <input type="text" id="recipient-phone" required 
-                                   placeholder="e.g., +1234567890">
+                        <div class="form-group message-mode-toggle">
+                            <label>Message Mode:</label>
+                            <div class="toggle-buttons">
+                                <button type="button" class="btn mode-btn active" data-mode="single">
+                                    <i class="fas fa-user"></i> Single
+                                </button>
+                                <button type="button" class="btn mode-btn" data-mode="bulk">
+                                    <i class="fas fa-users"></i> Bulk
+                                </button>
+                            </div>
                         </div>
+                        
+                        <div id="single-recipient" class="recipient-input">
+                            <div class="form-group">
+                                <label for="recipient-phone">Phone Number:</label>
+                                <input type="text" id="recipient-phone" 
+                                       placeholder="e.g., +1234567890">
+                            </div>
+                        </div>
+
+                        <div id="bulk-recipients" class="recipient-input hidden">
+                            <div class="form-group">
+                                <label for="bulk-phones">Phone Numbers:</label>
+                                <textarea id="bulk-phones" 
+                                        placeholder="Enter phone numbers (one per line)&#10;Example:&#10;+1234567890&#10;+1987654321"></textarea>
+                                <small class="help-text">Enter one phone number per line. Include country code (e.g., +1).</small>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label for="message-text">Message:</label>
                             <textarea id="message-text" required 
                                     placeholder="Enter your message"></textarea>
                         </div>
+
                         <div class="modal-buttons">
                             <button type="button" class="btn cancel-btn">Cancel</button>
-                            <button type="submit" class="btn"><i class="fas fa-paper-plane"></i> Send</button>
+                            <button type="submit" class="btn">
+                                <i class="fas fa-paper-plane"></i> 
+                                <span class="send-button-text">Send Message</span>
+                            </button>
                         </div>
                     </form>
                 </div>

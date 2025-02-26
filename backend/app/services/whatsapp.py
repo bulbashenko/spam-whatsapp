@@ -2,6 +2,7 @@ import os
 import time
 import base64
 import asyncio
+import logging
 import undetected_chromedriver as uc
 from app.core.redis import set_qr_code, delete_qr_code, get_qr_code
 from selenium.webdriver.common.by import By
@@ -17,6 +18,7 @@ from sqlalchemy import select
 from app.models.whatsapp import WhatsAppAccount, WhatsAppAccountStatus, WhatsAppMessage, WhatsAppMessageStatus
 from app.schemas.whatsapp import WhatsAppMessageRecipient, WhatsAppMessageHistory
 
+logger = logging.getLogger(__name__)
 
 class WhatsAppService:
     def __init__(self, db: AsyncSession):
@@ -75,11 +77,12 @@ class WhatsAppService:
                     options = uc.ChromeOptions()
                     options.add_argument('--no-sandbox')
                     options.add_argument(f'--user-data-dir={profile_path}')
-                    options.add_argument('--headless=new')
-                    options.add_argument('--window-size=1920,1080')
+                    options.add_argument('--start-maximized')  # Ensure window is maximized
+                    options.add_argument('--window-position=0,0')  # Position window at top-left
                     options.add_argument('--disable-dev-shm-usage')
-                    options.add_argument('--disable-gpu')
                     options.add_argument('--disable-extensions')
+                    options.add_argument('--disable-background-mode')  # Prevent background mode
+                    options.add_argument('--autoplay-policy=no-user-gesture-required')  # Allow foreground behavior
                     
                     # Performance optimizations
                     options.add_argument('--js-flags=--expose-gc')
@@ -97,7 +100,7 @@ class WhatsAppService:
                     
                     driver = uc.Chrome(
                         options=options,
-                        headless=True,
+                        headless=False,
                         use_subprocess=True,
                         driver_executable_path=None
                     )
@@ -110,6 +113,7 @@ class WhatsAppService:
                     await self._cleanup_chrome_processes()
                     await asyncio.sleep(5)
                     continue
+                logger.error(f"Failed to initialize Chrome after {max_attempts} attempts: {str(e)}")
                 raise Exception(f"Failed to initialize Chrome after {max_attempts} attempts: {str(e)}")
 
     async def get_account(self, account_id: str) -> Optional[WhatsAppAccount]:
@@ -199,27 +203,24 @@ class WhatsAppService:
                             return result
                             
                     except Exception as e:
-                        pass
+                        logger.debug(f"Waiting for QR code or login: {str(e)}")
                         
                     await asyncio.sleep(1)  # Reduced polling interval
                     
                 if not result["success"]:
-                    import logging
-                    logging.error(f"Authorization timeout for account {account.id}")
+                    logger.error(f"Authorization timeout for account {account.id}")
                     result["error"] = "Session initialization failed"
                     account.status = WhatsAppAccountStatus.ERROR
                     await self.db.commit()
                 
             except TimeoutException:
-                import logging
-                logging.error(f"Failed to get QR code for account {account.id}")
+                logger.error(f"Failed to get QR code for account {account.id}")
                 result["error"] = "Session initialization failed"
                 account.status = WhatsAppAccountStatus.ERROR
                 await self.db.commit()
                 
         except Exception as e:
-            import logging
-            logging.error(f"Session initialization error for account {account.id}: {str(e)}")
+            logger.error(f"Session initialization error for account {account.id}: {str(e)}")
             result["error"] = "Session initialization failed"
             account.status = WhatsAppAccountStatus.ERROR
             await self.db.commit()
@@ -282,6 +283,7 @@ class WhatsAppService:
             )
             message = result.scalar_one_or_none()
             if not message:
+                logger.error(f"Message {message_id} not found")
                 raise ValueError(f"Message {message_id} not found")
         
         if not message_id:
@@ -334,7 +336,7 @@ class WhatsAppService:
                 await self.db.commit()
                 
             except TimeoutException:
-                logging.error(f"Failed to load chat or find send button for account {account.id}, recipient {recipient.phone}")
+                logger.error(f"Failed to load chat or find send button for account {account.id}, recipient {recipient.phone}")
                 result["error"] = "Message sending failed"
                 account.status = WhatsAppAccountStatus.ERROR
                 message.status = WhatsAppMessageStatus.ERROR
@@ -342,7 +344,7 @@ class WhatsAppService:
                 await self.db.commit()
                 
         except Exception as e:
-            logging.error(f"Message sending error for account {account.id}, recipient {recipient.phone}: {str(e)}")
+            logger.error(f"Message sending error for account {account.id}, recipient {recipient.phone}: {str(e)}")
             result["error"] = "Message sending failed"
             account.status = WhatsAppAccountStatus.ERROR
             message.status = WhatsAppMessageStatus.ERROR
@@ -360,37 +362,49 @@ class WhatsAppService:
     ) -> List[Dict]:
         """Send bulk messages with optimized delays and connection reuse"""
         results = []
-        chunk_size = 5  # Process messages in chunks
         
-        for i in range(0, len(recipients), chunk_size):
-            chunk = recipients[i:i + chunk_size]
-            chunk_ids = message_ids[i:i + chunk_size] if message_ids else None
+        logger.info(f"Starting bulk send for account {account.id}, {len(recipients)} messages")
+        
+        for i, recipient in enumerate(recipients):
+            logger.info(f"Processing message {i+1}/{len(recipients)} to {recipient.phone}")
+            message_id = message_ids[i] if message_ids and i < len(message_ids) else None
             
-            # Process chunk concurrently
-            tasks = []
-            for j, recipient in enumerate(chunk):
-                message_id = chunk_ids[j] if chunk_ids and j < len(chunk_ids) else None
-                task = asyncio.create_task(self.send_message(
+            try:
+                if message_id:
+                    logger.info(f"Using existing message ID: {message_id}")
+                
+                result = await self.send_message(
                     account=account,
                     recipient=recipient,
                     message_id=message_id,
                     wait_time=wait_time
-                ))
-                tasks.append(task)
-            
-            # Wait for chunk to complete with small delay between messages
-            chunk_results = []
-            for task in tasks:
-                result = await task
-                chunk_results.append(result)
-                await asyncio.sleep(random.uniform(1, 3))  # Reduced delay
-            
-            results.extend(chunk_results)
-            
-            # Larger delay between chunks
-            if i + chunk_size < len(recipients):
-                await asyncio.sleep(random.uniform(3, 5))
+                )
+                
+                # Логируем результат отправки
+                logger.info(f"Message {i+1} result: {result.get('success', False)}")
+                if not result.get('success', False):
+                    logger.error(f"Message {i+1} error: {result.get('error', 'Unknown error')}")
+                    
+                results.append(result)
+                
+                # Small delay between messages
+                delay = random.uniform(2, 5)  # Увеличим задержку между сообщениями
+                logger.info(f"Waiting {delay:.2f} seconds before next message")
+                await asyncio.sleep(delay)
+                
+            except Exception as e:
+                logger.error(f"Error sending message {i+1}: {str(e)}")
+                # Добавляем результат с ошибкой в список
+                results.append({
+                    "success": False,
+                    "account_id": account.id,
+                    "recipient": recipient.phone,
+                    "message_id": message_id,
+                    "error": f"Exception: {str(e)}",
+                    "timestamp": datetime.now()
+                })
         
+        logger.info(f"Bulk send completed. Success: {sum(1 for r in results if r.get('success', False))}/{len(results)}")
         return results
 
     async def delete_account(self, account: WhatsAppAccount) -> bool:
@@ -419,7 +433,6 @@ class WhatsAppService:
             
             return True
         except Exception as e:
-            import logging
-            logging.error(f"Failed to delete account {account.id}: {str(e)}")
+            logger.error(f"Failed to delete account {account.id}: {str(e)}")
             await self.db.rollback()
             return False
