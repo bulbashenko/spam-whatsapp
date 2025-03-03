@@ -166,19 +166,20 @@
                 </table>
             </div>
 
-            <!-- Modal for sending messages -->
+            <!-- Модальное окно для отправки сообщений -->
             <div id="send-message-modal" class="modal hidden">
                 <div class="modal-content">
+                    <span class="close">&times;</span>
                     <h3>Send WhatsApp Message</h3>
                     <form id="send-message-form">
                         <div class="form-group message-mode-toggle">
                             <label>Message Mode:</label>
                             <div class="toggle-buttons">
-                                <button type="button" class="btn mode-btn active" data-mode="single">
-                                    <i class="fas fa-user"></i> Single
+                                <button type="button" class="mode-btn active" data-mode="single">
+                                    <i class="fas fa-user"></i> Single Recipient
                                 </button>
-                                <button type="button" class="btn mode-btn" data-mode="bulk">
-                                    <i class="fas fa-users"></i> Bulk
+                                <button type="button" class="mode-btn" data-mode="bulk">
+                                    <i class="fas fa-users"></i> Bulk Messages
                                 </button>
                             </div>
                         </div>
@@ -187,7 +188,8 @@
                             <div class="form-group">
                                 <label for="recipient-phone">Phone Number:</label>
                                 <input type="text" id="recipient-phone" 
-                                       placeholder="e.g., +1234567890">
+                                    placeholder="e.g., +1234567890">
+                                <small class="help-text">Include country code (e.g., +1 for USA, +44 for UK)</small>
                             </div>
                         </div>
 
@@ -208,7 +210,7 @@
 
                         <div class="modal-buttons">
                             <button type="button" class="btn cancel-btn">Cancel</button>
-                            <button type="submit" class="btn">
+                            <button type="submit" class="btn btn-whatsapp">
                                 <i class="fas fa-paper-plane"></i> 
                                 <span class="send-button-text">Send Message</span>
                             </button>
@@ -217,9 +219,10 @@
                 </div>
             </div>
 
-            <!-- Modal for message history -->
+            <!-- Модальное окно для истории сообщений -->
             <div id="message-history-modal" class="modal hidden">
                 <div class="modal-content">
+                    <span class="close">&times;</span>
                     <h3>Message History</h3>
                     <div class="table-container">
                         <table class="message-history-table">
@@ -241,33 +244,37 @@
                 </div>
             </div>
 
-            <!-- Modal for QR code -->
-            <div id="qr-code-modal" class="modal hidden">
-                <div class="modal-content">
-                    <h3>WhatsApp Initialization</h3>
-                    <div class="qr-status">Status: Waiting...</div>
-                    <div class="qr-code-container">
-                        <img id="qr-code-image" src="" alt="QR Code">
-                        <div class="loading-indicator">
-                            <i class="fas fa-spinner fa-spin"></i> Initializing...
-                        </div>
-                    </div>
-                    <div class="qr-instructions">
-                        <p>To connect WhatsApp, follow these steps:</p>
-                        <ol>
-                            <li>Open WhatsApp on your phone</li>
-                            <li>Tap Menu or Settings and select WhatsApp Web</li>
-                            <li>Point your phone's camera at the QR code</li>
-                            <li>Wait for chats to load</li>
-                        </ol>
-                        <p class="note">Important: Do not close this window until chats are fully loaded</p>
-                    </div>
-                    <div class="modal-buttons">
-                        <button type="button" class="btn cancel-btn">Close</button>
-                    </div>
-                </div>
+            <!-- Модальное окно для QR-кода -->
+<div id="qr-code-modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>WhatsApp Initialization</h3>
+        <div class="qr-status">Status: Waiting...</div>
+        <div class="qr-code-container">
+            <img id="qr-code-image" src="" alt="QR Code">
+            <div class="loading-indicator">
+                <i class="fas fa-spinner fa-spin"></i> Initializing...
             </div>
         </div>
+        <div class="qr-instructions">
+            <h4>To connect WhatsApp, follow these steps:</h4>
+            <ol>
+                <li>Open WhatsApp on your phone</li>
+                <li>Tap Menu <i class="fas fa-ellipsis-v"></i> or Settings <i class="fas fa-cog"></i> and select <strong>WhatsApp Web</strong></li>
+                <li>Point your phone's camera at the QR code on this screen</li>
+                <li>Wait for the connection to complete</li>
+            </ol>
+            <p class="note"><i class="fas fa-info-circle"></i> Do not close this window until connection is complete. This QR code expires in 2 minutes.</p>
+        </div>
+        <div class="modal-buttons">
+            <!-- Эта часть будет заполняться динамически в JavaScript -->
+            <button type="button" class="btn btn-check-status" onclick="forceCheckStatus('{accountId}')">
+                <i class="fas fa-sync-alt"></i> Check Status
+            </button>
+            <button type="button" class="btn cancel-btn">Close</button>
+        </div>
+    </div>
+</div>
 
     <script type="module" src="/static/js/api.js"></script>
     <script type="module" src="/static/js/auth.js"></script>

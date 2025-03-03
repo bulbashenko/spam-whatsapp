@@ -129,6 +129,8 @@ class WhatsAppQRCodeResponse(BaseModel):
     error: Optional[str] = None
     status_message: Optional[str] = None
     metadata: Optional[Dict] = None
+    authenticated: bool = False  # Добавленное поле - флаг аутентификации
+    close_modal: bool = False    # Добавленное поле - флаг закрытия модального окна
 
     @validator('status', pre=True)
     def normalize_status(cls, v):
@@ -152,7 +154,9 @@ class WhatsAppQRCodeResponse(BaseModel):
                     "last_sync": "2024-01-01T00:00:00",
                     "last_error": None,
                     "last_error_at": None
-                }
+                },
+                "authenticated": False,
+                "close_modal": False
             }
         }
 
