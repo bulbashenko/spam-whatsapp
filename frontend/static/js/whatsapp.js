@@ -390,9 +390,19 @@ window.initSession = async (accountId) => {
         // Показываем модальное окно с начальным состоянием
         openModal(qrCodeModal);
         
-        // Настраиваем UI
-        qrCodeImage.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmaWxsPSIjNjY2Ij5Preparing QR code...</text></svg>';
+        // Use a properly encoded placeholder image - transparent 1px PNG
+        const placeholderImg = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        qrCodeImage.src = placeholderImg;
         qrCodeImage.style.display = 'block';
+        qrCodeImage.alt = 'Preparing QR code...';
+        
+        // Add text to help user
+        const loadingText = document.createElement('div');
+        loadingText.textContent = 'Preparing WhatsApp QR code...';
+        loadingText.style.textAlign = 'center';
+        loadingText.style.marginTop = '10px';
+        loadingText.style.fontWeight = 'bold';
+        qrCodeImage.insertAdjacentElement('afterend', loadingText);
         
         if (qrStatusText) {
             qrStatusText.textContent = 'Status: Initializing...';
@@ -781,65 +791,7 @@ sendMessageForm.addEventListener('submit', async (e) => {
     }
 });
 
-// Modal handling
-function openModal(modal) {
-    document.body.style.overflow = 'hidden';
-    modal.style.display = 'block';
-    modal.classList.remove('hidden');
-    
-    // Включаем анимацию появления
-    setTimeout(() => {
-        modal.classList.add('fade-in');
-    }, 10);
-}
-
-function closeModal(modal) {
-    // Очищаем любые интервалы и таймауты
-    if (modal === qrCodeModal) {
-        clearQRPolling();
-        qrCodeImage.src = '';
-        
-        // Сбрасываем статус
-        if (qrStatusText) {
-            qrStatusText.textContent = '';
-        }
-        
-        // Скрываем индикатор загрузки
-        const loadingIndicator = document.querySelector('.loading-indicator');
-        if (loadingIndicator) {
-            loadingIndicator.style.display = 'none';
-        }
-        
-        // Проверяем, нужно ли обновлять список аккаунтов после закрытия
-        const currentAccountElem = modal.querySelector('[data-account-id]');
-        const accountId = currentAccountElem ? currentAccountElem.getAttribute('data-account-id') : null;
-        
-        if (accountId) {
-            // Асинхронно обновляем список аккаунтов для актуализации статусов
-            setTimeout(async () => {
-                try {
-                    await loadAccounts();
-                } catch (error) {
-                    console.error('Error updating accounts after modal close:', error);
-                }
-            }, 500);
-        }
-    } else if (modal === sendMessageModal) {
-        sendMessageForm.reset();
-    } else if (modal === messageHistoryModal) {
-        currentAccountId = null;
-    }
-    
-    // Включаем анимацию исчезновения
-    modal.classList.remove('fade-in');
-    
-    // Задержка перед скрытием для анимации
-    setTimeout(() => {
-        document.body.style.overflow = '';
-        modal.style.display = 'none';
-        modal.classList.add('hidden');
-    }, 300);
-}
+// Modal handling functions
 
 // Modal Close Buttons
 document.querySelectorAll('.cancel-btn, .close').forEach(btn => {
@@ -948,14 +900,41 @@ window.addEventListener('beforeunload', () => {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize all modals as hidden on page load
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        modal.style.visibility = 'hidden';
+    });
+    
+    // Load accounts if on WhatsApp section
     if (!whatsappSection.classList.contains('hidden')) {
         loadAccounts();
     }
     
-    // Добавляем класс для анимации модальных окон
+    // Add animation class for modal contents
     document.querySelectorAll('.modal-content').forEach(content => {
         content.classList.add('animate');
     });
+    
+    // Ensure modals have proper event handlers
+    document.querySelectorAll('.modal .close, .modal .cancel-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = btn.closest('.modal');
+            closeModal(modal);
+        });
+    });
+    
+    // Add event listener for QR code status check button
+    const checkQrStatusBtn = document.getElementById('check-qr-status');
+    if (checkQrStatusBtn) {
+        checkQrStatusBtn.addEventListener('click', () => {
+            if (currentAccountId) {
+                forceCheckStatus(currentAccountId);
+            }
+        });
+    }
 });
 
 // Добавляем эффекты перехода для кнопок
@@ -968,6 +947,82 @@ document.querySelectorAll('.btn').forEach(btn => {
         this.style.transform = 'translateY(0)';
     });
 });
+
+// Improved modal handling
+function openModal(modal) {
+    if (!modal) return;
+    
+    // Hide all other modals first to prevent stacking
+    document.querySelectorAll('.modal').forEach(m => {
+        if (m !== modal && !m.classList.contains('hidden')) {
+            closeModal(m);
+        }
+    });
+    
+    // Show this modal
+    document.body.style.overflow = 'hidden';
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+    modal.style.visibility = 'visible';
+    
+    // Add fade-in animation after a small delay (for transition to work)
+    setTimeout(() => {
+        modal.style.opacity = '1';
+        modal.classList.add('fade-in');
+    }, 10);
+}
+
+function closeModal(modal) {
+    if (!modal) return;
+    
+    // Clear any QR code related intervals/timeouts
+    if (modal === qrCodeModal) {
+        clearQRPolling();
+        qrCodeImage.src = '';
+        
+        // Reset status
+        if (qrStatusText) {
+            qrStatusText.textContent = 'Status: Waiting...';
+        }
+        
+        // Hide loading indicator
+        const loadingIndicator = document.querySelector('.loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+        
+        // Check if we need to update account list after closing
+        const currentAccountElem = modal.querySelector('[data-account-id]');
+        const accountId = currentAccountElem ? currentAccountElem.getAttribute('data-account-id') : null;
+        
+        if (accountId) {
+            // Asynchronously update accounts to reflect current status
+            setTimeout(async () => {
+                try {
+                    await loadAccounts();
+                } catch (error) {
+                    console.error('Error updating accounts after modal close:', error);
+                }
+            }, 500);
+        }
+    } else if (modal === sendMessageModal) {
+        sendMessageForm.reset();
+    } else if (modal === messageHistoryModal) {
+        currentAccountId = null;
+    }
+    
+    // Remove fade-in and start fade-out
+    modal.classList.remove('fade-in');
+    modal.style.opacity = '0';
+    
+    // Wait for animation to complete before hiding
+    setTimeout(() => {
+        document.body.style.overflow = '';
+        modal.style.display = 'none';
+        modal.style.visibility = 'hidden';
+        modal.classList.add('hidden');
+    }, 300);
+}
 
 // Экспортируем функции для доступа из других модулей
 export { loadAccounts };

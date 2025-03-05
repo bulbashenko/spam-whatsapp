@@ -156,6 +156,16 @@ const api = new class ApiClient {
     async getBusinessDetails(businessId) {
         return this.request(`/business/details/${businessId}`);
     }
+    
+    async saveSearchToGoogleContacts(searchId) {
+        return this.request(`/business/search/save-to-google/${searchId}`, {
+            method: 'POST'
+        });
+    }
+    
+    async getGoogleContactsTaskStatus(taskId) {
+        return this.request(`/business/search/task/${taskId}`);
+    }
 
     // WhatsApp API Methods
     // Generic HTTP methods
@@ -203,6 +213,21 @@ const api = new class ApiClient {
         return this.request(`/whatsapp/accounts/${accountId}/send`, {
             method: 'POST',
             body: JSON.stringify(messageData)
+        });
+    }
+
+    // Google Contacts API Methods
+    async getGoogleAuthUrl() {
+        return this.request('/google/auth/url');
+    }
+
+    async getGoogleConnectionStatus() {
+        return this.request('/google/status');
+    }
+
+    async disconnectGoogleAccount() {
+        return this.request('/google/disconnect', {
+            method: 'DELETE'
         });
     }
 }

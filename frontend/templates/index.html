@@ -3,29 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Search</title>
+    <title>Business Search Pro</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Animate.css for animations -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    
+    <!-- Modular CSS Architecture -->
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/whatsapp.css">
+    <link rel="stylesheet" href="/static/css/google.css">
+    <link rel="stylesheet" href="/static/css/utilities.css">
+    
+    <!-- Custom Styles (keeping style.css for backward compatibility) -->
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Preconnect to Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <nav id="main-nav">
-        <div class="nav-content">
-            <h1>Business Search</h1>
-            <div class="nav-links">
-                <span id="user-info" class="hidden">
-                    Welcome, <span id="user-email"></span>
-                </span>
-                <button id="search-nav-btn" class="btn active"><i class="fas fa-search"></i> Search</button>
-                <button id="whatsapp-nav-btn" class="btn"><i class="fab fa-whatsapp"></i> WhatsApp</button>
-                <button id="login-btn" class="btn"><i class="fas fa-sign-in-alt"></i> Login</button>
-                <button id="register-btn" class="btn"><i class="fas fa-user-plus"></i> Register</button>
-                <button id="logout-btn" class="btn hidden"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    <div class="page-wrapper">
+        <nav id="main-nav">
+            <div class="nav-content">
+                <div class="brand-container">
+                    <h1 class="animate__animated animate__fadeIn">
+                        <i class="fas fa-search-location"></i> 
+                        Business Search
+                    </h1>
+                </div>
+                <div class="nav-links">
+                    <span id="user-info" class="hidden">
+                        <i class="fas fa-user-circle"></i> 
+                        <span id="user-email"></span>
+                    </span>
+                    <button id="search-nav-btn" class="nav-btn active">
+                        <i class="fas fa-search"></i> 
+                        <span class="btn-text">Search</span>
+                    </button>
+                    <button id="whatsapp-nav-btn" class="nav-btn">
+                        <i class="fab fa-whatsapp"></i> 
+                        <span class="btn-text">WhatsApp</span>
+                    </button>
+                    <button id="google-nav-btn" class="nav-btn">
+                        <i class="fab fa-google"></i> 
+                        <span class="btn-text">Google</span>
+                    </button>
+                    <button id="login-btn" class="nav-btn auth-btn">
+                        <i class="fas fa-sign-in-alt"></i> 
+                        <span class="btn-text">Login</span>
+                    </button>
+                    <button id="register-btn" class="nav-btn auth-btn">
+                        <i class="fas fa-user-plus"></i> 
+                        <span class="btn-text">Register</span>
+                    </button>
+                    <button id="logout-btn" class="nav-btn auth-btn hidden">
+                        <i class="fas fa-sign-out-alt"></i> 
+                        <span class="btn-text">Logout</span>
+                    </button>
+                </div>
             </div>
-        </div>
-    </nav>
+        </nav>
 
     <main>
-        <div id="auth-forms" class="container">
+        <div id="auth-forms" class="container hidden">
             <form id="login-form" class="auth-form hidden">
                 <h2>Login</h2>
                 <div class="form-group">
@@ -68,7 +116,9 @@
                     <label for="location">Location:</label>
                     <div class="location-input-container">
                         <input type="text" id="location" required 
-                               placeholder="e.g., New York, NY">
+                               placeholder="Введите название города..." autocomplete="off">
+                        <!-- Location suggestions will be populated dynamically by JavaScript -->
+                        <!-- The location-suggestions div is added by JavaScript -->
                     </div>
                 </div>
                 <div class="form-group">
@@ -100,7 +150,7 @@
                         </button>
                     </div>
                 </div>
-                <table id="results-table">
+                <table id="results-table" class="table table-hover table-striped">
                     <thead>
                         <tr>
                             <th>Name</th>
@@ -119,11 +169,77 @@
                 </div>
             </div>
         </div>
-    </main>
-
-    <div id="toast-container"></div>
-
-
+        
+        <!-- Dashboard Section - New Feature -->
+        <div id="dashboard-section" class="container hidden">
+            <div class="dashboard-header">
+                <h2><i class="fas fa-chart-line"></i> Dashboard</h2>
+                <p class="text-muted">Analytics and business insights</p>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 class="stat-value" id="total-searches">0</h3>
+                            <p class="stat-label">Searches</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 class="stat-value" id="total-businesses">0</h3>
+                            <p class="stat-label">Businesses Found</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 class="stat-value" id="total-messages">0</h3>
+                            <p class="stat-label">Messages Sent</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-lg-8">
+                    <div class="chart-container">
+                        <h3><i class="fas fa-chart-bar"></i> Search Activity</h3>
+                        <canvas id="searchActivityChart"></canvas>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="recent-searches-container">
+                        <h3><i class="fas fa-history"></i> Recent Searches</h3>
+                        <ul class="recent-searches-list" id="recent-searches-list">
+                            <!-- Will be populated dynamically -->
+                            <li class="search-item">
+                                <div class="search-details">
+                                    <span class="search-type">Restaurants</span>
+                                    <span class="search-date">Today, 14:32</span>
+                                </div>
+                                <button class="btn-icon repeat-search">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- WhatsApp Section -->
         <div id="whatsapp-section" class="container hidden">
             <div class="section-header">
                 <h2><i class="fab fa-whatsapp"></i> WhatsApp Accounts</h2>
@@ -152,7 +268,7 @@
                         <input type="text" id="accounts-search" placeholder="Filter accounts...">
                     </div>
                 </div>
-                <table id="accounts-table">
+                <table id="accounts-table" class="table table-hover table-striped">
                     <thead>
                         <tr>
                             <th>Profile Name</th>
@@ -248,16 +364,18 @@
 <div id="qr-code-modal" class="modal hidden">
     <div class="modal-content">
         <span class="close">&times;</span>
-        <h3>WhatsApp Initialization</h3>
-        <div class="qr-status">Status: Waiting...</div>
+        <div class="modal-header">
+            <h3><i class="fab fa-whatsapp"></i> WhatsApp Initialization</h3>
+        </div>
+        <div class="qr-status">Status: Waiting for QR code scan...</div>
         <div class="qr-code-container">
-            <img id="qr-code-image" src="" alt="QR Code">
+            <img id="qr-code-image" src="" alt="WhatsApp QR Code">
             <div class="loading-indicator">
-                <i class="fas fa-spinner fa-spin"></i> Initializing...
+                <i class="fas fa-spinner fa-spin"></i> Preparing QR code...
             </div>
         </div>
         <div class="qr-instructions">
-            <h4>To connect WhatsApp, follow these steps:</h4>
+            <h4><i class="fas fa-info-circle"></i> To connect WhatsApp, follow these steps:</h4>
             <ol>
                 <li>Open WhatsApp on your phone</li>
                 <li>Tap Menu <i class="fas fa-ellipsis-v"></i> or Settings <i class="fas fa-cog"></i> and select <strong>WhatsApp Web</strong></li>
@@ -267,8 +385,7 @@
             <p class="note"><i class="fas fa-info-circle"></i> Do not close this window until connection is complete. This QR code expires in 2 minutes.</p>
         </div>
         <div class="modal-buttons">
-            <!-- Эта часть будет заполняться динамически в JavaScript -->
-            <button type="button" class="btn btn-check-status" onclick="forceCheckStatus('{accountId}')">
+            <button type="button" class="btn btn-check-status" id="check-qr-status">
                 <i class="fas fa-sync-alt"></i> Check Status
             </button>
             <button type="button" class="btn cancel-btn">Close</button>
@@ -276,11 +393,100 @@
     </div>
 </div>
 
+
+        <!-- Google Contacts Section -->
+        <div id="google-section" class="container hidden">
+            <div class="section-header">
+                <h2><i class="fab fa-google"></i> Google Contacts Integration</h2>
+                <div id="google-status-bar" class="status-bar">
+                    <span id="google-status-text">Not connected</span>
+                    <button id="connect-google-btn" class="btn btn-google">
+                        <i class="fab fa-google"></i> Connect Google
+                    </button>
+                    <button id="disconnect-google-btn" class="btn btn-danger hidden">
+                        <i class="fas fa-unlink"></i> Disconnect
+                    </button>
+                </div>
+            </div>
+
+            <div id="google-not-connected" class="connection-info">
+                <div class="info-card">
+                    <div class="info-icon">
+                        <i class="fab fa-google"></i>
+                    </div>
+                    <div class="info-content">
+                        <h3>Connect to Google Contacts</h3>
+                        <p>Connect your Google account to automatically save business contacts from your searches to Google Contacts.</p>
+                        <button id="connect-google-account-btn" class="btn btn-google">
+                            <i class="fab fa-google"></i> Connect Google Account
+                        </button>
+                    </div>
+                </div>
+                <div class="features-list">
+                    <h4>Benefits of connecting:</h4>
+                    <ul>
+                        <li><i class="fas fa-check"></i> Automatically save searched businesses as contacts</li>
+                        <li><i class="fas fa-check"></i> Access your business contacts from anywhere</li>
+                        <li><i class="fas fa-check"></i> Easily organize and manage business contacts</li>
+                        <li><i class="fas fa-check"></i> Sync across all your Google devices</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="google-connected" class="connection-info hidden">
+                <div class="info-card connected">
+                    <div class="info-icon">
+                        <i class="fab fa-google"></i>
+                    </div>
+                    <div class="info-content">
+                        <h3>Google Contacts Connected</h3>
+                        <p>Your Google account is connected. Business searches will automatically be saved to your Google Contacts.</p>
+                        <div class="account-info">
+                            <div class="info-row">
+                                <span class="info-label">Connected Account:</span>
+                                <span id="google-email" class="info-value">email@example.com</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Connected Since:</span>
+                                <span id="google-connected-date" class="info-value">January 1, 2023</span>
+                            </div>
+                        </div>
+                        <button id="disconnect-google-account-btn" class="btn btn-danger">
+                            <i class="fas fa-unlink"></i> Disconnect Google Account
+                        </button>
+                    </div>
+                </div>
+                <div class="usage-info">
+                    <h4>How It Works:</h4>
+                    <ol>
+                        <li>Search for businesses using the Search tab</li>
+                        <li>Results are automatically saved to your Google Contacts</li>
+                        <li>Access your contacts in Google Contacts on any device</li>
+                        <li>Business details include phone numbers, addresses, websites, and more</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+    <!-- Bootstrap JS bundle (includes Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- SweetAlert2 for improved alerts -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Alpine.js for lightweight interactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Application scripts -->
     <script type="module" src="/static/js/api.js"></script>
     <script type="module" src="/static/js/auth.js"></script>
     <script type="module" src="/static/js/search.js"></script>
     <script type="module" src="/static/js/ui.js"></script>
     <script type="module" src="/static/js/whatsapp.js"></script>
+    <script type="module" src="/static/js/google.js"></script>
     <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

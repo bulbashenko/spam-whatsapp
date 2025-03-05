@@ -8,7 +8,9 @@ import psutil
 import tempfile
 import json
 from datetime import datetime
-import undetected_chromedriver as uc
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -18,7 +20,6 @@ from typing import Optional, Dict, List, Any, Union
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.redis import set_qr_code, delete_qr_code, get_qr_code, reset_auth_status
 from app.models.whatsapp import WhatsAppAccount, WhatsAppAccountStatus, WhatsAppMessage, WhatsAppMessageStatus
 from app.schemas.whatsapp import WhatsAppMessageRecipient, WhatsAppMessageHistory
@@ -29,38 +30,39 @@ class WhatsAppService:
     def __init__(self, db: AsyncSession):
         self.db = db
         
-        # Настройка директории для Chrome профилей
-        if settings.CHROME_PROFILES_DIR:
-            self.base_profile_dir = os.path.abspath(settings.CHROME_PROFILES_DIR)
-        else:
-            # Резервная директория, если настройка не указана
-            self.base_profile_dir = os.path.abspath("./chrome-profiles")
+        # Hardcoded Chrome profiles directory path
+        self.base_profile_dir = "/root/chrome-profiles"
+        logger.info(f"Using Chrome profiles directory: {self.base_profile_dir}")
         
-        # Создаем директорию, если она не существует
+        # Create directory if it doesn't exist
         if not os.path.exists(self.base_profile_dir):
             os.makedirs(self.base_profile_dir, exist_ok=True)
+            logger.info(f"Created Chrome profiles directory: {self.base_profile_dir}")
             
-        # Настройки таймингов
+        # Timing settings
         self.qr_check_interval = 1
         self.qr_max_wait = 60
         
-        # Блокировка для пула браузеров
+        # Browser pool lock and storage
         self._browser_pool_lock = asyncio.Lock()
         self._browser_pool = {}
     
     def _get_profile_path(self, profile_name: str) -> str:
-        """Возвращает путь к профилю Chrome"""
-        # Убираем недопустимые символы из имени профиля
+        """Returns the path to a Chrome profile"""
+        # Remove invalid characters from the profile name
         safe_name = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in profile_name)
-        return os.path.join(self.base_profile_dir, f"profile-{safe_name}")
+        profile_path = os.path.join(self.base_profile_dir, f"profile-{safe_name}")
+        logger.info(f"Profile path for {profile_name}: {profile_path}")
+        return profile_path
     
     async def _cleanup_chrome_processes(self):
-        """Очищает зависшие процессы Chrome"""
+        """Cleans up hanging Chrome processes"""
         try:
+            logger.info("Starting Chrome processes cleanup")
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
                     proc_name = proc.info['name'].lower()
-                    # Проверяем имя процесса в зависимости от ОС
+                    # Check process name depending on OS
                     is_chrome = False
                     if platform.system() == "Windows":
                         is_chrome = proc_name == 'chrome.exe'
@@ -69,41 +71,55 @@ class WhatsAppService:
                     
                     if is_chrome and proc.info['cmdline']:
                         cmdline = ' '.join(proc.info['cmdline'])
-                        if 'undetected_chromedriver' in cmdline or self.base_profile_dir in cmdline:
+                        if self.base_profile_dir in cmdline:
                             logger.info(f"Terminating Chrome process: {proc.pid}")
                             proc.terminate()
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
+            logger.info("Chrome processes cleanup completed")
         except Exception as e:
             logger.error(f"Error cleaning up Chrome processes: {str(e)}")
     
-    async def _init_chrome(self, profile_path: str) -> uc.Chrome:
-        """Инициализирует Chrome с оптимальными настройками"""
+    async def _init_chrome(self, profile_path: str) -> webdriver.Chrome:
+        """Initializes Chrome with optimal settings using standard Selenium"""
         loop = asyncio.get_event_loop()
         max_attempts = 3
         
+        # Ensure the profile directory exists
+        os.makedirs(profile_path, exist_ok=True)
+        logger.info(f"Ensuring profile directory exists: {profile_path}")
+        
         for attempt in range(max_attempts):
             try:
-                # Создаем драйвер в отдельной функции, чтобы выполнить его в другом потоке
+                # Create driver in a separate function to execute it in another thread
                 def create_driver():
-                    options = uc.ChromeOptions()
+                    options = Options()
                     
-                    # Основные параметры запуска
+                    # Basic launch parameters
                     options.add_argument('--no-sandbox')
                     options.add_argument(f'--user-data-dir={profile_path}')
                     options.add_argument('--start-maximized')
                     options.add_argument('--window-position=0,0')
                     
-                    # Отключаем ненужные функции
+                    # Disable unnecessary features
                     options.add_argument('--disable-dev-shm-usage')
                     options.add_argument('--disable-extensions')
                     options.add_argument('--disable-background-mode')
                     options.add_argument('--disable-popup-blocking')
                     options.add_argument('--disable-notifications')
                     options.add_argument('--disable-infobars')
-                    options.add_argument('--disable-gpu') # Особенно важно для Linux VPS
+                    options.add_argument('--disable-gpu')  # Important for Linux VPS
                     
-                    # Оптимизации производительности
+                    # Important parameters for WhatsApp Web
+                    options.add_argument('--enable-features=NetworkServiceInProcess')
+                    options.add_argument('--disable-site-isolation-trials')
+                    options.add_experimental_option('excludeSwitches', ['enable-automation'])
+                    options.add_experimental_option('useAutomationExtension', False)
+                    
+                    # Custom user agent for better compatibility
+                    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36')
+                    
+                    # Performance optimizations
                     options.add_argument('--autoplay-policy=no-user-gesture-required')
                     options.add_argument('--disable-background-networking')
                     options.add_argument('--disable-background-timer-throttling')
@@ -112,50 +128,56 @@ class WhatsAppService:
                     options.add_argument('--no-first-run')
                     options.add_argument('--no-default-browser-check')
                     
-                    # Выбираем случайный порт для отладки
+                    # Choose a random debug port
                     import random
                     debug_port = random.randint(9222, 9999)
                     options.add_argument(f'--remote-debugging-port={debug_port}')
                     
-                    # Всегда используем headless режим
-                    headless = True
+                    # Headless mode
+                    options.add_argument('--headless=new')  # Use new headless mode
                     
                     try:
-                        driver = uc.Chrome(
-                            options=options,
-                            headless=headless,
-                            use_subprocess=True,
-                            driver_executable_path=None,
-                            version_main=133,  # Явно указываем версию Chrome 133
-                            no_sandbox=True
-                        )
+                        logger.info(f"Creating Chrome driver with user data dir: {profile_path}")
+                        service = Service()
+                        driver = webdriver.Chrome(service=service, options=options)
+                        logger.info("Chrome driver created successfully")
                         return driver
                     except Exception as e:
                         logger.error(f"Chrome initialization error: {str(e)}")
                         raise
 
-                # Запускаем создание драйвера в отдельном потоке
+                # Launch driver creation in a separate thread
+                logger.info(f"Attempt {attempt+1}/{max_attempts} to initialize Chrome")
                 driver = await loop.run_in_executor(None, create_driver)
                 
-                # Устанавливаем разумные тайм-ауты
+                # Set reasonable timeouts
                 driver.implicitly_wait(10)
                 driver.set_page_load_timeout(30)
+                
+                # Test the browser by loading a simple page
+                try:
+                    logger.info("Testing browser with a simple navigation")
+                    driver.get("about:blank")
+                    logger.info("Browser test successful")
+                except Exception as e:
+                    logger.error(f"Browser test failed: {str(e)}")
+                    raise
                 
                 return driver
                 
             except Exception as e:
                 logger.error(f"Failed to initialize Chrome (attempt {attempt+1}/{max_attempts}): {str(e)}")
                 
-                # Если это последняя попытка, вызываем исключение
+                # If this is the last attempt, raise exception
                 if attempt == max_attempts - 1:
                     raise
                 
-                # Иначе чистим процессы и пробуем снова
+                # Otherwise clean up processes and try again
                 await self._cleanup_chrome_processes()
                 await asyncio.sleep(5)
     
     async def get_account(self, account_id: str) -> Optional[WhatsAppAccount]:
-        """Получает учетную запись WhatsApp по ID"""
+        """Get a WhatsApp account by ID"""
         result = await self.db.execute(
             select(WhatsAppAccount).where(WhatsAppAccount.id == account_id)
         )
@@ -164,7 +186,7 @@ class WhatsAppService:
     async def initialize_session(
         self, account: WhatsAppAccount, wait_time: int = 60
     ) -> Dict:
-        """Инициализирует сессию WhatsApp и возвращает QR-код для сканирования"""
+        """Initialize a WhatsApp session and return QR code for scanning"""
         result = {
             "success": False,
             "account_id": account.id,
@@ -173,24 +195,26 @@ class WhatsAppService:
             "qr_code": None
         }
 
-        # Создаем путь к профилю
+        # Create profile path
         profile_path = self._get_profile_path(account.profile_name)
         account.profile_path = profile_path
         await self.db.commit()
         
-        # Полностью сбрасываем статус аутентификации в Redis (удаляем QR-код и метку авторизации)
+        # Reset authentication status in Redis (delete QR code and auth marker)
         await reset_auth_status(account.id)
         
         driver = None
         try:
-            # Определяем нужно ли создавать новый профиль
+            # Check if we need to create a new profile
             new_profile = False
             if account.status not in [WhatsAppAccountStatus.ACTIVE, WhatsAppAccountStatus.INITIALIZED]:
                 if os.path.exists(profile_path):
+                    logger.info(f"Cleaning existing profile at {profile_path}")
                     import shutil
                     try:
                         shutil.rmtree(profile_path)
                         new_profile = True
+                        logger.info(f"Successfully removed profile directory: {profile_path}")
                     except Exception as e:
                         logger.warning(f"Failed to clean profile directory: {str(e)}")
                 else:
@@ -198,25 +222,28 @@ class WhatsAppService:
                 
                 if new_profile:
                     os.makedirs(profile_path, exist_ok=True)
+                    logger.info(f"Created profile directory: {profile_path}")
             
-            # Инициализируем Chrome
+            # Initialize Chrome
+            logger.info(f"Initializing Chrome for account {account.id}")
             driver = await self._init_chrome(profile_path)
             
-            # Открываем WhatsApp Web
+            # Open WhatsApp Web
+            logger.info("Opening WhatsApp Web")
             driver.get("https://web.whatsapp.com/")
-            await asyncio.sleep(3)  # Даем странице немного времени загрузиться
+            await asyncio.sleep(3)  # Give the page some time to load
             
-            # Устанавливаем таймеры
+            # Set timers
             start_time = time.time()
             qr_found = False
             qr_disappeared = False
             authenticated = False
             
-            # Обновляем статус аккаунта
+            # Update account status
             account.status = WhatsAppAccountStatus.PENDING
             await self.db.commit()
             
-            # Делаем скриншот начального состояния
+            # Take screenshot of initial state
             try:
                 screenshot_path = os.path.join(profile_path, f"init_screenshot_{int(time.time())}.png")
                 driver.save_screenshot(screenshot_path)
@@ -224,15 +251,17 @@ class WhatsAppService:
             except Exception as e:
                 logger.warning(f"Failed to save init screenshot: {str(e)}")
             
-            # Основной цикл проверки
+            # Main checking loop
+            logger.info(f"Starting authentication check loop for account {account.id}")
             while time.time() - start_time < wait_time:
                 try:
-                    # Проверяем наличие QR кода
+                    # Check for QR code
                     qr_elements = driver.find_elements(By.TAG_NAME, "canvas")
                     
-                    # Если QR код найден и еще не был сохранен
+                    # If QR code is found and not saved yet
                     if qr_elements and not qr_found:
-                        # Извлекаем QR код как Base64 изображение
+                        logger.info(f"QR code element found for account {account.id}")
+                        # Extract QR code as Base64 image
                         qr_base64 = driver.execute_script("""
                             const canvas = document.querySelector('canvas');
                             if (!canvas || canvas.width === 0 || canvas.height === 0) {
@@ -247,27 +276,27 @@ class WhatsAppService:
                         """)
                         
                         if qr_base64:
-                            # Сохраняем QR код в Redis
+                            # Save QR code to Redis
                             await set_qr_code(account.id, qr_base64, expire=120)
                             
-                            # Проверяем, что QR код сохранился корректно
+                            # Check that QR code was saved correctly
                             saved_qr = await get_qr_code(account.id)
                             if saved_qr:
                                 result["qr_code"] = qr_base64
                                 qr_found = True
                                 logger.info(f"QR code generated for account {account.id}")
                     
-                    # Ключевая проверка: QR код был, но исчез
+                    # Key check: QR code was present but disappeared
                     if qr_found and not qr_elements:
                         logger.info(f"QR code disappeared for account {account.id} - checking for authenticated state")
                         qr_disappeared = True
                         
-                        # Даем небольшую паузу для загрузки интерфейса
+                        # Give a small pause for UI loading
                         await asyncio.sleep(2)
                     
-                    # Проверяем наличие характерных элементов интерфейса WhatsApp
+                    # Check for WhatsApp interface elements
                     if qr_disappeared or (not qr_elements and not new_profile):
-                        # Делаем скриншот для проверки
+                        # Take screenshot for verification
                         try:
                             screenshot_path = os.path.join(profile_path, f"auth_screenshot_{int(time.time())}.png")
                             driver.save_screenshot(screenshot_path)
@@ -275,7 +304,7 @@ class WhatsAppService:
                         except Exception as e:
                             logger.warning(f"Failed to save auth screenshot: {str(e)}")
                         
-                        # Проверяем наличие элементов интерфейса - любой из этих селекторов должен существовать
+                        # Check for UI elements - any of these selectors should exist
                         ui_selectors = [
                             "#app", "#main", ".app", ".two", "[data-testid='conversation-panel']",
                             "[data-testid='chat-list']", "[data-testid='default-user']", "[data-icon='default-user']",
@@ -292,34 +321,34 @@ class WhatsAppService:
                             except:
                                 pass
                     
-                    # Если пользователь авторизован
+                    # If user is authenticated
                     if authenticated or qr_disappeared:
                         logger.info(f"WhatsApp account {account.id} authenticated")
                         
-                        # Удаляем QR код из Redis и устанавливаем флаг аутентификации
+                        # Delete QR code from Redis
                         await delete_qr_code(account.id)
                         
-                        # Обновляем статус аккаунта
+                        # Update account status
                         account.status = WhatsAppAccountStatus.ACTIVE
                         if not account.account_metadata:
                             account.account_metadata = {}
                         account.account_metadata["last_active"] = datetime.now().isoformat()
                         await self.db.commit()
                         
-                        # ИЗМЕНЕНИЕ: Установка флага для фронтенда, чтобы закрыть модальное окно
+                        # Set flag for frontend to close modal window
                         result["success"] = True
                         result["status"] = WhatsAppAccountStatus.ACTIVE
-                        result["authenticated"] = True  # Явный флаг для фронтенда
+                        result["authenticated"] = True  # Explicit flag for frontend
                         
-                        # Для устранения проблемы с "зависшими" браузерами,
-                        # принудительно закрываем браузер после успешной аутентификации
+                        # To fix issues with "hanging" browsers,
+                        # forcibly close the browser after successful authentication
                         try:
                             driver.quit()
                             logger.info(f"Browser closed after successful authentication for account {account.id}")
                         except Exception as e:
                             logger.warning(f"Error closing browser: {str(e)}")
                         
-                        # Сбрасываем кеш браузера
+                        # Reset browser cache
                         async with self._browser_pool_lock:
                             if profile_path in self._browser_pool:
                                 del self._browser_pool[profile_path]
@@ -329,10 +358,10 @@ class WhatsAppService:
                 except Exception as e:
                     logger.debug(f"Error during initialization check: {str(e)}")
                 
-                # Небольшая пауза перед следующей проверкой
+                # Small pause before next check
                 await asyncio.sleep(1)
             
-            # Если вышло время ожидания
+            # If wait time expired
             if not result["success"]:
                 logger.warning(f"Session initialization timeout for account {account.id}")
                 if qr_found:
@@ -340,8 +369,8 @@ class WhatsAppService:
                 else:
                     result["error"] = "Failed to generate QR code"
                 
-                # Если QR код был найден, оставляем статус PENDING
-                # В противном случае устанавливаем статус ERROR
+                # If QR code was found, leave status as PENDING
+                # Otherwise set status to ERROR
                 if not qr_found:
                     account.status = WhatsAppAccountStatus.ERROR
                     account.set_error(result["error"])
@@ -358,7 +387,7 @@ class WhatsAppService:
             await self.db.commit()
             
         finally:
-            # ИЗМЕНЕНИЕ: Если мы не аутентифицировались, закрываем браузер для экономии ресурсов
+            # If we're not authenticated, close the browser to save resources
             if driver and not result.get("authenticated", False):
                 try:
                     driver.quit()
@@ -367,25 +396,26 @@ class WhatsAppService:
         
         return result
 
-    async def _get_or_create_browser(self, profile_path: str) -> uc.Chrome:
-        """Получает существующий браузер из пула или создает новый"""
+    async def _get_or_create_browser(self, profile_path: str) -> webdriver.Chrome:
+        """Get an existing browser from the pool or create a new one"""
         async with self._browser_pool_lock:
             if profile_path in self._browser_pool:
                 browser = self._browser_pool[profile_path]
                 try:
-                    # Проверяем, что браузер жив
+                    # Check that the browser is alive
                     browser.current_url
+                    logger.info(f"Reusing existing browser for profile: {profile_path}")
                     return browser
                 except Exception as e:
                     logger.warning(f"Browser from pool is dead, creating new one: {str(e)}")
-                    # Браузер мертв, удаляем из пула
+                    # Browser is dead, remove from pool
                     try:
                         browser.quit()
                     except:
                         pass
                     del self._browser_pool[profile_path]
             
-            # Создаем новый браузер
+            # Create a new browser
             logger.info(f"Creating new browser for profile: {profile_path}")
             browser = await self._init_chrome(profile_path)
             self._browser_pool[profile_path] = browser
@@ -397,7 +427,7 @@ class WhatsAppService:
         recipient: WhatsAppMessageRecipient,
         status: WhatsAppMessageStatus = WhatsAppMessageStatus.PENDING
     ) -> WhatsAppMessage:
-        """Создает запись в истории сообщений"""
+        """Create a record in message history"""
         message = WhatsAppMessage(
             account_id=account.id,
             recipient=recipient.phone,
@@ -415,7 +445,7 @@ class WhatsAppService:
         limit: int = 100,
         offset: int = 0
     ) -> List[WhatsAppMessage]:
-        """Получает историю сообщений"""
+        """Get message history"""
         result = await self.db.execute(
             select(WhatsAppMessage)
             .where(WhatsAppMessage.account_id == account_id)
@@ -431,11 +461,11 @@ class WhatsAppService:
         recipient: WhatsAppMessageRecipient,
         message_id: Optional[str] = None,
         wait_time: int = 60,
-        existing_driver: Optional[uc.Chrome] = None,
+        existing_driver: Optional[webdriver.Chrome] = None,
         close_driver: bool = True
     ) -> Dict:
-        """Отправляет сообщение WhatsApp"""
-        # Получаем запись сообщения, если указан message_id
+        """Send a WhatsApp message using direct URL approach with improved handling"""
+        # Get message record if message_id is specified
         message = None
         if message_id:
             result = await self.db.execute(
@@ -446,11 +476,11 @@ class WhatsAppService:
                 logger.error(f"Message {message_id} not found")
                 raise ValueError(f"Message {message_id} not found")
         
-        # Если message_id не указан, создаем новую запись
+        # If message_id is not specified, create a new record
         if not message:
             message = await self.create_message_history(account, recipient)
         
-        # Готовим результат
+        # Prepare result
         result = {
             "success": False,
             "account_id": account.id,
@@ -460,8 +490,9 @@ class WhatsAppService:
             "timestamp": datetime.now()
         }
         
-        # Проверяем, готов ли аккаунт
+        # Check if account is ready
         if not account.is_ready:
+            logger.warning(f"Account {account.id} is not ready for sending messages")
             result["error"] = "Account is not active or not initialized"
             message.status = WhatsAppMessageStatus.ERROR
             message.error_message = result["error"]
@@ -473,222 +504,300 @@ class WhatsAppService:
         browser_created = False
         
         try:
-            # Используем существующий драйвер или создаем новый
+            # Use existing driver or create a new one
             if driver is None:
-                # Получаем или создаем браузер из пула
+                # First visit main WhatsApp page to ensure we're authenticated
+                logger.info(f"Getting browser for profile {profile_path}")
                 driver = await self._get_or_create_browser(profile_path)
                 browser_created = True
+                
+                # First check that the session is authenticated
+                logger.info("First visiting main WhatsApp page to ensure we're authenticated")
+                driver.get("https://web.whatsapp.com/")
+                await asyncio.sleep(5)  # Give time to load
+                
+                # Check for QR code (if session is not authenticated)
+                qr_elements = driver.find_elements(By.TAG_NAME, "canvas")
+                if qr_elements:
+                    logger.warning(f"QR code detected when trying to send message for account {account.id}")
+                    # Take a screenshot of the QR code
+                    try:
+                        screenshot_path = os.path.join(profile_path, f"qr_detected_{int(time.time())}.png")
+                        driver.save_screenshot(screenshot_path)
+                        logger.info(f"QR code screenshot saved to {screenshot_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to save QR code screenshot: {str(e)}")
+                        
+                    result["error"] = "WhatsApp account not authenticated"
+                    message.status = WhatsAppMessageStatus.ERROR
+                    message.error_message = result["error"]
+                    await self.db.commit()
+                    
+                    # Update account status
+                    account.status = WhatsAppAccountStatus.PENDING
+                    await self.db.commit()
+                    
+                    # Close the browser
+                    if browser_created:
+                        try:
+                            driver.quit()
+                        except:
+                            pass
+                        async with self._browser_pool_lock:
+                            if profile_path in self._browser_pool:
+                                del self._browser_pool[profile_path]
+                    
+                    return result
+                
+                # Wait for UI to fully load
+                try:
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chat-list'], #pane-side"))
+                    )
+                    logger.info("WhatsApp UI loaded successfully")
+                except Exception as e:
+                    logger.warning(f"WhatsApp UI loading timeout: {str(e)}")
             
-            # Формируем прямую ссылку для отправки сообщения
+            # Format direct link for sending message
             message_text = str(recipient.message)
             direct_url = (
                 f"https://web.whatsapp.com/send?phone={recipient.phone.replace('+', '')}"
                 f"&text={quote(message_text)}"
             )
             
-            # Переходим по ссылке
+            # Navigate to the direct link
+            logger.info(f"Navigating to direct URL for sending message to {recipient.phone}")
             driver.get(direct_url)
             
-            # Инициализируем переменные для отслеживания состояния отправки
+            # Initialize variables for tracking sending state
             message_sent = False
-            button_found = False  # Инициализируем переменную до её использования
+            button_found = False
             
             try:
-                # Таймер для измерения времени загрузки
-                load_start_time = time.time()
-                
-                # JavaScript для быстрого поиска и клика по кнопке отправки
-                send_button_js = """
-                function clickSendButton() {
-                    // Приоритетные селекторы
-                    const selectors = [
-                        'span[data-icon="send"]', 
-                        'div[data-icon="send"]',
-                        'div[aria-label="Send"]',
-                        'button.send'
-                    ];
-                    
-                    // Ищем кнопку отправки
-                    for (const selector of selectors) {
-                        const elements = document.querySelectorAll(selector);
-                        for (const el of elements) {
-                            if (el && el.offsetParent !== null) {
-                                // Элемент видим - нажимаем
-                                el.click();
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                }
-                return clickSendButton();
-                """
-                
-                # JavaScript для оптимальной отправки сообщения с паузой
-                two_phase_send_js = """
-                // Функция поиска кнопки отправки
-                function findSendButton() {
-                    // Проверяем базовые ошибки
-                    const app = document.querySelector('#app');
-                    if (!app) return { status: 'WAIT', message: 'App not loaded' };
-                    
-                    // Проверяем ошибки номера
-                    if (document.body.innerText.includes('Phone number shared via url is invalid')) {
-                        return { status: 'ERROR', message: 'Invalid phone number' };
-                    }
-                    
-                    // Проверяем наличие QR-кода
-                    const qrCanvas = document.querySelector('canvas');
-                    if (qrCanvas) return { status: 'ERROR', message: 'WhatsApp account not authenticated' };
-                    
-                    // Проверим, загружен ли чат
-                    const chatPanel = document.querySelector('[data-testid="conversation-panel"]');
-                    
-                    // Приоритетный поиск кнопки отправки (без клика)
-                    const sendSelectors = [
-                        'span[data-icon="send"]', 
-                        'div[data-icon="send"]',
-                        'button.send',
-                        'div[aria-label="Send"]', 
-                        '[role="button"][aria-label="Send"]',
-                        '[data-testid="send"]'
-                    ];
-                    
-                    for (const selector of sendSelectors) {
-                        const elements = document.querySelectorAll(selector);
-                        for (const el of elements) {
-                            if (el && el.offsetParent !== null) {
-                                return { status: 'BUTTON_FOUND', message: 'Send button found' };
-                            }
-                        }
-                    }
-                    
-                    // Если кнопка не найдена, но чат загружен
-                    if (chatPanel) {
-                        return { status: 'CHAT_READY', message: 'Chat loaded, but send button not found yet' };
-                    }
-                    
-                    return { status: 'WAIT', message: 'Waiting for chat to load' };
-                }
-
-                // Функция выполнения клика по кнопке отправки
-                function clickSendButton() {
-                    const sendSelectors = [
-                        'span[data-icon="send"]', 
-                        'div[data-icon="send"]',
-                        'button.send',
-                        'div[aria-label="Send"]', 
-                        '[role="button"][aria-label="Send"]',
-                        '[data-testid="send"]'
-                    ];
-                    
-                    for (const selector of sendSelectors) {
-                        const elements = document.querySelectorAll(selector);
-                        for (const el of elements) {
-                            if (el && el.offsetParent !== null) {
-                                try {
-                                    el.click();
-                                    return { status: 'SUCCESS', message: 'Message sent' };
-                                } catch (e) {
-                                    // Игнорируем ошибки клика
-                                }
-                            }
-                        }
-                    }
-                    
-                    return { status: 'ERROR', message: 'Failed to click send button' };
-                }
-                
-                return JSON.stringify(findSendButton());
-                """
-                
-                # Немедленно начинаем проверку загрузки (без предварительных ожиданий)
+                # Take a screenshot after navigating
                 try:
-                    # Делаем скриншот для отладки (не блокируя основной процесс)
-                    screenshot_path = os.path.join(profile_path, f"send_message_{int(time.time())}.png")
+                    screenshot_path = os.path.join(profile_path, f"direct_url_{int(time.time())}.png")
                     driver.save_screenshot(screenshot_path)
-                    logger.info(f"Screenshot saved to {screenshot_path}")
+                    logger.info(f"Screenshot after direct URL navigation saved to {screenshot_path}")
                 except Exception as e:
                     logger.warning(f"Failed to save screenshot: {str(e)}")
                 
-                # Оптимизированный подход с паузой перед отправкой
-                max_poll_time = 30  # до 30 секунд на все попытки для надежности
+                # Check for version error message
+                try:
+                    # Use a generic selector for Chrome version error
+                    error_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Chrome') and contains(text(), '60')]")
+                    if error_elements and len(error_elements) > 0:
+                        logger.error("Detected Chrome version compatibility error")
+                        
+                        # Try to bypass the issue by using the main interface
+                        try:
+                            # Navigate to main page
+                            driver.get("https://web.whatsapp.com/")
+                            await asyncio.sleep(3)
+                            
+                            # Add JavaScript to change User-Agent
+                            driver.execute_script("""
+                            Object.defineProperty(navigator, 'userAgent', {
+                                get: function () { return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'; }
+                            });
+                            """)
+                            
+                            # Try direct link again
+                            driver.get(direct_url)
+                            await asyncio.sleep(5)
+                            
+                            # Take a screenshot after retry
+                            try:
+                                screenshot_path = os.path.join(profile_path, f"retry_url_{int(time.time())}.png")
+                                driver.save_screenshot(screenshot_path)
+                                logger.info(f"Screenshot after retry saved to {screenshot_path}")
+                            except Exception as e:
+                                pass
+                            
+                        except Exception as e:
+                            logger.error(f"Error during version bypass attempt: {str(e)}")
+                    
+                    # Check for invalid phone number error
+                    error_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Phone number shared via url is invalid')]")
+                    if error_elements and len(error_elements) > 0:
+                        raise ValueError(f"Invalid phone number: {recipient.phone}")
+                except Exception as e:
+                    if "Invalid phone number" in str(e):
+                        logger.error(str(e))
+                        raise
+                    logger.warning(f"Error during error check: {str(e)}")
+                
+                # Optimized approach with pause before sending
+                max_poll_time = 40  # increased to 40 seconds for all attempts
                 poll_start = time.time()
                 poll_attempts = 0
                 
-                # Фаза 1: Ожидаем загрузки чата и поиск кнопки отправки
+                # Phase 1: Wait for chat to load and find send button
                 while time.time() - poll_start < max_poll_time and not message_sent and not button_found:
-                    try:
-                        poll_attempts += 1
-                        js_result = driver.execute_script(two_phase_send_js)
-                        
+                    poll_attempts += 1
+                    
+                    # Take screenshot every 10 attempts for debugging
+                    if poll_attempts % 10 == 0:
                         try:
-                            # Пытаемся распарсить результат как JSON
-                            result_obj = json.loads(js_result)
-                            status = result_obj.get('status', '')
-                            message_info = result_obj.get('message', '')
-                            
-                            if status == 'BUTTON_FOUND':
-                                logger.info(f"Send button found after {poll_attempts} attempts")
+                            screenshot_path = os.path.join(profile_path, f"poll_attempt_{poll_attempts}_{int(time.time())}.png")
+                            driver.save_screenshot(screenshot_path)
+                            logger.info(f"Poll attempt {poll_attempts} screenshot saved to {screenshot_path}")
+                        except Exception as e:
+                            pass
+                    
+                    # Check for QR code (session lost)
+                    qr_elements = driver.find_elements(By.TAG_NAME, "canvas")
+                    if qr_elements:
+                        logger.error(f"QR code detected during message sending for account {account.id}")
+                        raise Exception("WhatsApp account not authenticated")
+                    
+                    # Check for browser version error
+                    version_error = driver.find_elements(By.XPATH, "//*[contains(text(), 'Chrome') and contains(text(), '60')]")
+                    if version_error:
+                        logger.error("Detected Chrome version error during polling")
+                        
+                        # Use JavaScript to modify user agent
+                        driver.execute_script("""
+                        Object.defineProperty(navigator, 'userAgent', {
+                            get: function () { return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'; }
+                        });
+                        """)
+                        
+                        # Refresh the page
+                        driver.refresh()
+                        await asyncio.sleep(5)
+                        continue
+                    
+                    # Check if chat is loaded
+                    chat_loaded = False
+                    try:
+                        chat_elements = driver.find_elements(By.CSS_SELECTOR, '[data-testid="conversation-panel"]')
+                        if chat_elements:
+                            chat_loaded = True
+                            logger.info("Chat panel found")
+                    except Exception as e:
+                        pass
+                    
+                    # Check for send button
+                    send_button_selectors = [
+                        'span[data-icon="send"]', 
+                        'div[data-icon="send"]',
+                        'button.send',
+                        'div[aria-label="Send"]', 
+                        '[role="button"][aria-label="Send"]',
+                        '[data-testid="send"]',
+                        '[aria-label="Send"]',  # Universal label
+                        '[title="Send"]'        # Universal title
+                    ]
+                    
+                    for selector in send_button_selectors:
+                        try:
+                            buttons = driver.find_elements(By.CSS_SELECTOR, selector)
+                            if buttons and len(buttons) > 0 and buttons[0].is_displayed():
+                                logger.info(f"Send button found: {selector}")
                                 button_found = True
                                 break
-                                
-                            elif status == 'ERROR':
-                                if "Invalid phone number" in message_info:
-                                    raise ValueError(f"Invalid phone number: {recipient.phone}")
-                                if "WhatsApp account not authenticated" in message_info:
-                                    raise Exception("WhatsApp account not authenticated")
-                                logger.debug(f"JS Error: {message_info}")
-                                
-                            elif status == 'CHAT_READY' and poll_attempts % 10 == 0:  # Логируем не слишком часто
-                                logger.info(f"Chat loaded in {time.time() - load_start_time:.2f}s, searching for send button")
-                        except json.JSONDecodeError:
-                            # Если не удалось распарсить как JSON, обрабатываем как строку
-                            logger.debug(f"Non-JSON response: {js_result}")
-                        
-                        # Очень короткая пауза между попытками поиска кнопки
-                        await asyncio.sleep(0.5)
-                        
-                    except ValueError as e:
-                        # Явная ошибка с номером телефона - прекращаем попытки
-                        logger.error(f"Invalid phone number: {str(e)}")
-                        result["error"] = str(e)
-                        message.status = WhatsAppMessageStatus.ERROR
-                        message.error_message = result["error"]
-                        await self.db.commit()
-                        raise
-                        
-                    except Exception as loop_error:
-                        # Другие ошибки логируем, но продолжаем попытки
-                        logger.debug(f"Error in polling loop: {str(loop_error)}")
-                
-                # Фаза 2: Если кнопка найдена, выполняем отправку сообщения
-                if button_found:
-                    logger.info("Waiting 0.2 seconds before sending message")
-                    await asyncio.sleep(0.2)  # Минимальная пауза для стабилизации интерфейса
+                        except Exception as e:
+                            pass
                     
-                    # Метод 1: Отправка через JavaScript
+                    # If button found or chat loaded and we've waited long enough
+                    if button_found or (chat_loaded and poll_attempts > 20):
+                        break
+                    
+                    # Small pause between attempts
+                    await asyncio.sleep(0.5)
+                
+                # If button not found but chat loaded, try sending via Enter
+                if not button_found and chat_loaded:
+                    from selenium.webdriver.common.keys import Keys
+                    
+                    # Look for input field
+                    input_selectors = [
+                        '[contenteditable="true"][role="textbox"]',
+                        '[data-testid="conversation-compose-box-input"]',
+                        '#main footer .selectable-text',
+                        '.copyable-text.selectable-text'
+                    ]
+                    
+                    for selector in input_selectors:
+                        try:
+                            inputs = driver.find_elements(By.CSS_SELECTOR, selector)
+                            if inputs and len(inputs) > 0:
+                                # Focus on element and clear it
+                                input_element = inputs[0]
+                                driver.execute_script("arguments[0].focus();", input_element)
+                                input_element.clear()
+                                
+                                # Additional Enter press may help send the message
+                                input_element.send_keys(Keys.ENTER)
+                                logger.info("Pressed Enter key in input field")
+                                await asyncio.sleep(1)
+                                button_found = True  # Set flag that we found a way to send
+                                break
+                        except Exception as e:
+                            logger.debug(f"Error with input selector {selector}: {str(e)}")
+                
+                # Phase 2: If button found or we found input field, send message
+                if button_found or chat_loaded:
+                    logger.info("Ready to send message, waiting before attempting")
+                    await asyncio.sleep(1)  # Pause for interface stabilization
+                    
+                    # Method 1: Send via JavaScript
                     try:
                         click_send_js = """
                         function clickSendButton() {
+                            // Try to find send button
                             const selectors = [
                                 'span[data-icon="send"]', 
                                 'div[data-icon="send"]',
                                 'button.send',
                                 'div[aria-label="Send"]', 
                                 '[role="button"][aria-label="Send"]',
-                                '[data-testid="send"]'
+                                '[data-testid="send"]',
+                                '[aria-label="Send"]',
+                                '[title="Send"]'
                             ];
                             
                             for (const selector of selectors) {
                                 const elements = document.querySelectorAll(selector);
                                 for (const el of elements) {
                                     if (el && el.offsetParent !== null) {
-                                        el.click();
-                                        return true;
+                                        // Element is visible - click it
+                                        try {
+                                            el.click();
+                                            return true;
+                                        } catch(e) {
+                                            console.error('Error clicking element:', e);
+                                        }
                                     }
                                 }
                             }
+                            
+                            // If button not found, try sending via Enter in input field
+                            const inputSelectors = [
+                                '[contenteditable="true"][role="textbox"]',
+                                '[data-testid="conversation-compose-box-input"]',
+                                '#main footer .selectable-text',
+                                '.copyable-text.selectable-text'
+                            ];
+                            
+                            for (const selector of inputSelectors) {
+                                const inputs = document.querySelectorAll(selector);
+                                if (inputs.length > 0) {
+                                    const input = inputs[0];
+                                    input.focus();
+                                    
+                                    // Create and dispatch Enter event
+                                    const enterEvent = new KeyboardEvent('keydown', {
+                                        bubbles: true,
+                                        cancelable: true,
+                                        keyCode: 13
+                                    });
+                                    input.dispatchEvent(enterEvent);
+                                    return true;
+                                }
+                            }
+                            
                             return false;
                         }
                         return clickSendButton();
@@ -696,14 +805,18 @@ class WhatsAppService:
                         
                         result_js = driver.execute_script(click_send_js)
                         if result_js:
-                            logger.info("Message sent via JavaScript with delay")
+                            logger.info("Message sent via JavaScript")
                             message_sent = True
                     except Exception as e:
-                        logger.warning(f"Error sending via JavaScript with delay: {str(e)}")
+                        logger.warning(f"Error sending via JavaScript: {str(e)}")
                     
-                    # Метод 2: Отправка через Enter (если JavaScript не сработал)
+                    # If JavaScript didn't work, try other methods
                     if not message_sent:
+                        # Method 2: Send via Enter key
                         try:
+                            from selenium.webdriver.common.keys import Keys
+                            from selenium.webdriver.common.action_chains import ActionChains
+                            
                             input_selectors = [
                                 '[contenteditable="true"][role="textbox"]',
                                 '[data-testid="conversation-compose-box-input"]',
@@ -714,12 +827,10 @@ class WhatsAppService:
                             for selector in input_selectors:
                                 inputs = driver.find_elements(By.CSS_SELECTOR, selector)
                                 if inputs and len(inputs) > 0:
-                                    # Фокус на элементе
+                                    # Focus on element
                                     driver.execute_script("arguments[0].focus();", inputs[0])
                                     
-                                    # Отправляем Enter
-                                    from selenium.webdriver.common.keys import Keys
-                                    from selenium.webdriver.common.action_chains import ActionChains
+                                    # Send Enter
                                     actions = ActionChains(driver)
                                     actions.send_keys(Keys.ENTER)
                                     actions.perform()
@@ -728,41 +839,71 @@ class WhatsAppService:
                                     break
                         except Exception as e:
                             logger.warning(f"Error sending via Enter key: {str(e)}")
+                        
+                        # Method 3: Click via Selenium Actions
+                        if not message_sent:
+                            try:
+                                from selenium.webdriver.common.action_chains import ActionChains
+                                
+                                send_button_selectors = [
+                                    'span[data-icon="send"]', 
+                                    'div[data-icon="send"]',
+                                    'button.send',
+                                    'div[aria-label="Send"]',
+                                    '[role="button"][aria-label="Send"]',
+                                    '[data-testid="send"]',
+                                    '[aria-label="Send"]',
+                                    '[title="Send"]'
+                                ]
+                                
+                                for selector in send_button_selectors:
+                                    buttons = driver.find_elements(By.CSS_SELECTOR, selector)
+                                    if buttons and len(buttons) > 0:
+                                        # Scroll to button
+                                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", buttons[0])
+                                        await asyncio.sleep(0.5)
+                                        
+                                        # Click the button
+                                        actions = ActionChains(driver)
+                                        actions.move_to_element(buttons[0])
+                                        actions.click()
+                                        actions.perform()
+                                        logger.info(f"Message sent via Selenium click on {selector}")
+                                        message_sent = True
+                                        break
+                            except Exception as e:
+                                logger.warning(f"Error sending via Selenium click: {str(e)}")
+                        
+                        # Method 4: Direct JavaScript click
+                        if not message_sent:
+                            try:
+                                for selector in send_button_selectors:
+                                    buttons = driver.find_elements(By.CSS_SELECTOR, selector)
+                                    if buttons and len(buttons) > 0:
+                                        driver.execute_script("arguments[0].click();", buttons[0])
+                                        logger.info(f"Message sent via direct JavaScript click on {selector}")
+                                        message_sent = True
+                                        break
+                            except Exception as e:
+                                logger.warning(f"Error sending via direct JavaScript click: {str(e)}")
                     
-                    # Метод 3: Клик через Selenium Actions (если предыдущие не сработали)
-                    if not message_sent:
-                        try:
-                            send_button_selectors = [
-                                'span[data-icon="send"]', 
-                                'div[data-icon="send"]',
-                                'button.send',
-                                'div[aria-label="Send"]'
-                            ]
-                            
-                            for selector in send_button_selectors:
-                                buttons = driver.find_elements(By.CSS_SELECTOR, selector)
-                                if buttons and len(buttons) > 0:
-                                    from selenium.webdriver.common.action_chains import ActionChains
-                                    actions = ActionChains(driver)
-                                    actions.move_to_element(buttons[0])
-                                    actions.click()
-                                    actions.perform()
-                                    logger.info(f"Message sent via Selenium click on {selector}")
-                                    message_sent = True
-                                    break
-                        except Exception as e:
-                            logger.warning(f"Error sending via Selenium click: {str(e)}")
+                    # Wait for send confirmation
+                    await asyncio.sleep(2)
                     
-                    # Ожидаем 2 секунды для завершения отправки
-                    await asyncio.sleep(0.5)
+                    # Take screenshot after send attempt
+                    try:
+                        screenshot_path = os.path.join(profile_path, f"after_send_{int(time.time())}.png")
+                        driver.save_screenshot(screenshot_path)
+                        logger.info(f"Screenshot after send attempt saved to {screenshot_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to save after-send screenshot: {str(e)}")
                 
-                
-                # Дополнительная проверка фактической отправки сообщения
-                if message_sent:
-                    # Дополнительная пауза для гарантии отправки
-                    await asyncio.sleep(0.5)
+                # Additional check for actual message sending
+                if message_sent or button_found:
+                    # Additional pause to ensure sending
+                    await asyncio.sleep(2)
                     
-                    # Проверяем, что поле ввода очистилось - признак успешной отправки
+                    # Check that input field is cleared - sign of successful sending
                     input_empty = False
                     try:
                         input_selectors = [
@@ -775,14 +916,17 @@ class WhatsAppService:
                         for selector in input_selectors:
                             inputs = driver.find_elements(By.CSS_SELECTOR, selector)
                             if inputs and len(inputs) > 0:
-                                if not inputs[0].text.strip():
+                                input_text = inputs[0].text.strip()
+                                if not input_text:
                                     input_empty = True
                                     logger.info("Input field is empty - message likely sent")
                                     break
+                                else:
+                                    logger.warning(f"Input field still contains text: '{input_text}'")
                     except Exception as e:
                         logger.warning(f"Error checking input field: {str(e)}")
                     
-                    # Проверяем наличие меток доставки
+                    # Check for delivery markers
                     delivery_markers = False
                     try:
                         markers = driver.find_elements(By.CSS_SELECTOR, 
@@ -793,7 +937,7 @@ class WhatsAppService:
                     except Exception as e:
                         logger.warning(f"Error checking delivery markers: {str(e)}")
                     
-                    # Если есть хотя бы один признак успешной отправки
+                    # If there is at least one sign of successful sending
                     if input_empty or delivery_markers:
                         result["success"] = True
                         message.status = WhatsAppMessageStatus.SENT
@@ -801,7 +945,7 @@ class WhatsAppService:
                             message.message_metadata = {}
                         message.message_metadata["sent_at"] = datetime.now().isoformat()
                         
-                        # Обновляем метаданные аккаунта
+                        # Update account metadata
                         if not account.account_metadata:
                             account.account_metadata = {}
                         account.account_metadata["last_message_sent"] = datetime.now().isoformat()
@@ -810,15 +954,38 @@ class WhatsAppService:
                         await self.db.commit()
                         logger.info(f"Message sent successfully to {recipient.phone} (empty_input={input_empty}, markers={delivery_markers})")
                     else:
-                        # Если нет признаков успешной отправки
-                        result["success"] = False
-                        message.status = WhatsAppMessageStatus.ERROR
-                        message.error_message = "No confirmation of successful message delivery"
-                        await self.db.commit()
-                        logger.warning(f"No delivery confirmation for message to {recipient.phone}")
+                        # Check for sent message in chat history
+                        try:
+                            message_elements = driver.find_elements(By.CSS_SELECTOR, 
+                                '.message-out, [data-testid="msg-container"]')
+                            if message_elements and len(message_elements) > 0:
+                                # If we found at least one message in history, consider send successful
+                                result["success"] = True
+                                message.status = WhatsAppMessageStatus.SENT
+                                if not message.message_metadata:
+                                    message.message_metadata = {}
+                                message.message_metadata["sent_at"] = datetime.now().isoformat()
+                                
+                                await self.db.commit()
+                                logger.info(f"Message found in chat history - assuming successfully sent to {recipient.phone}")
+                            else:
+                                # If no signs of successful sending
+                                result["success"] = False
+                                message.status = WhatsAppMessageStatus.ERROR
+                                message.error_message = "No confirmation of successful message delivery"
+                                await self.db.commit()
+                                logger.warning(f"No delivery confirmation for message to {recipient.phone}")
+                        except Exception as e:
+                            logger.warning(f"Error checking message history: {str(e)}")
+                            # If no signs of successful sending
+                            result["success"] = False
+                            message.status = WhatsAppMessageStatus.ERROR
+                            message.error_message = "No confirmation of successful message delivery"
+                            await self.db.commit()
+                            logger.warning(f"No delivery confirmation for message to {recipient.phone}")
                 else:
                     if button_found:
-                        logger.warning(f"Button was found but message couldn't be sent after {time.time() - poll_start:.2f}s")
+                        logger.warning(f"Button was found but message couldn't be sent")
                         result["error"] = "Failed to click send button after finding it"
                     else:
                         logger.warning(f"Failed to find send button after {time.time() - poll_start:.2f}s of trying")
@@ -829,42 +996,42 @@ class WhatsAppService:
                     await self.db.commit()
                 
             except Exception as e:
-                # Обрабатываем ошибки и устанавливаем статус сообщения
+                # Handle errors and set message status
                 logger.error(f"Error sending WhatsApp message: {str(e)}")
                 result["error"] = str(e)
                 message.status = WhatsAppMessageStatus.ERROR
                 message.error_message = result["error"]
                 await self.db.commit()
                 
-                # Не выбрасываем исключение - просто возвращаем результат с ошибкой
+                # Just return result with error instead of raising exception
                 
         except Exception as e:
-            # Общие ошибки
+            # General errors
             logger.error(f"Message sending error: {str(e)}")
             result["error"] = f"Message sending failed: {str(e)}"
             message.status = WhatsAppMessageStatus.ERROR
             message.error_message = result["error"]
             
-            # Проверяем, не потеряли ли мы соединение
+            # Check if we lost connection
             if isinstance(e, WebDriverException) and "not reachable" in str(e).lower():
                 account.status = WhatsAppAccountStatus.ERROR
                 account.set_error("Browser connection lost")
             
             await self.db.commit()
             
-            # В случае критической ошибки, закрываем браузер
-            if driver:
+            # In case of critical error, close browser
+            if driver and browser_created:
                 try:
                     driver.quit()
                 except:
                     pass
-                # Удаляем из пула
+                # Remove from pool
                 async with self._browser_pool_lock:
-                    if account.profile_path in self._browser_pool:
-                        del self._browser_pool[account.profile_path]
+                    if profile_path in self._browser_pool:
+                        del self._browser_pool[profile_path]
         
         finally:
-            # Закрываем браузер только если мы его создали и нужно закрыть
+            # Close browser only if we created it and need to close
             if driver and close_driver and browser_created:
                 try:
                     driver.quit()
@@ -872,7 +1039,7 @@ class WhatsAppService:
                 except Exception as e:
                     logger.warning(f"Error closing browser: {str(e)}")
                 
-                # Удаляем из пула
+                # Remove from pool
                 async with self._browser_pool_lock:
                     if profile_path in self._browser_pool:
                         del self._browser_pool[profile_path]
@@ -886,37 +1053,112 @@ class WhatsAppService:
         message_ids: Optional[List[str]] = None,
         wait_time: int = 60
     ) -> List[Dict]:
-        """Отправляет массовые сообщения с оптимизированной задержкой между ними"""
+        """Send bulk messages with optimized delay between them"""
         results = []
         
         logger.info(f"Starting bulk send for account {account.id}, {len(recipients)} messages")
         
-        # Получаем путь к профилю
+        # Get profile path
         profile_path = account.profile_path or self._get_profile_path(account.profile_name)
         
-        # Создаем один браузер для всех сообщений
+        # Create one browser for all messages
         driver = None
         try:
-            # Инициализируем браузер один раз для всех сообщений
+            # First check account status to ensure it's authenticated
+            status_check = await self.check_account_status(account)
+            if status_check["status"] != WhatsAppAccountStatus.ACTIVE:
+                logger.warning(f"Account {account.id} is not active for bulk sending. Current status: {status_check['status']}")
+                # Try to initialize the account again if it's not active
+                if account.status != WhatsAppAccountStatus.ACTIVE:
+                    logger.info(f"Re-initializing account {account.id} before bulk send")
+                    init_result = await self.initialize_session(account)
+                    if not init_result["success"]:
+                        error_msg = f"Failed to initialize account: {init_result.get('error', 'Unknown error')}"
+                        logger.error(error_msg)
+                        # Return error results for all messages
+                        for i, recipient in enumerate(recipients):
+                            message_id = message_ids[i] if message_ids and i < len(message_ids) else None
+                            if message_id:
+                                result = await self.db.execute(
+                                    select(WhatsAppMessage).where(WhatsAppMessage.id == message_id)
+                                )
+                                message = result.scalar_one_or_none()
+                                if message:
+                                    message.status = WhatsAppMessageStatus.ERROR
+                                    message.error_message = error_msg
+                            results.append({
+                                "success": False,
+                                "account_id": account.id,
+                                "recipient": recipient.phone,
+                                "message_id": message_id,
+                                "error": error_msg,
+                                "timestamp": datetime.now()
+                            })
+                        await self.db.commit()
+                        return results
+            
+            # Initialize browser once for all messages
+            logger.info(f"Initializing browser for bulk send using profile: {profile_path}")
             driver = await self._get_or_create_browser(profile_path)
+            
+            # First visit WhatsApp Web page to ensure we're authenticated
+            driver.get("https://web.whatsapp.com/")
+            await asyncio.sleep(5)
+            
+            # Check if we need to authenticate
+            qr_elements = driver.find_elements(By.TAG_NAME, "canvas")
+            if qr_elements:
+                logger.error(f"QR code detected before bulk sending for account {account.id}")
+                error_msg = "WhatsApp account not authenticated"
+                # Return error results for all messages
+                for i, recipient in enumerate(recipients):
+                    message_id = message_ids[i] if message_ids and i < len(message_ids) else None
+                    if message_id:
+                        result = await self.db.execute(
+                            select(WhatsAppMessage).where(WhatsAppMessage.id == message_id)
+                        )
+                        message = result.scalar_one_or_none()
+                        if message:
+                            message.status = WhatsAppMessageStatus.ERROR
+                            message.error_message = error_msg
+                    results.append({
+                        "success": False,
+                        "account_id": account.id,
+                        "recipient": recipient.phone,
+                        "message_id": message_id,
+                        "error": error_msg,
+                        "timestamp": datetime.now()
+                    })
+                await self.db.commit()
+                
+                # Close the browser
+                try:
+                    driver.quit()
+                except:
+                    pass
+                async with self._browser_pool_lock:
+                    if profile_path in self._browser_pool:
+                        del self._browser_pool[profile_path]
+                
+                return results
             
             for i, recipient in enumerate(recipients):
                 logger.info(f"Processing message {i+1}/{len(recipients)} to {recipient.phone}")
-                # Получаем ID сообщения, если они были переданы
+                # Get message ID if provided
                 message_id = message_ids[i] if message_ids and i < len(message_ids) else None
                 
                 try:
-                    # Используем общий браузер для всех сообщений и не закрываем его между отправками
+                    # Use shared browser for all messages and don't close between sends
                     result = await self.send_message(
                         account=account,
                         recipient=recipient,
                         message_id=message_id,
                         wait_time=wait_time,
                         existing_driver=driver,
-                        close_driver=False  # Не закрываем браузер между сообщениями
+                        close_driver=False  # Don't close browser between messages
                     )
                     
-                    # Логируем результат внутри блока try
+                    # Log result inside try block
                     if result.get('success', False):
                         logger.info(f"Message {i+1} sent successfully")
                     else:
@@ -924,16 +1166,16 @@ class WhatsAppService:
                     
                     results.append(result)
                     
-                    # Минимальная задержка между сообщениями
-                    if i < len(recipients) - 1:  # Пропускаем задержку после последнего сообщения
+                    # Minimum delay between messages
+                    if i < len(recipients) - 1:  # Skip delay after last message
                         import random
-                        delay = random.uniform(1, 2)  # Минимальная необходимая пауза
+                        delay = random.uniform(2, 3)  # Slightly longer pause for reliability
                         logger.info(f"Waiting {delay:.2f} seconds before next message")
                         await asyncio.sleep(delay)
                 
                 except Exception as e:
                     logger.error(f"Error sending message {i+1}: {str(e)}")
-                    # Добавляем информацию об ошибке в результат
+                    # Add error info to result
                     results.append({
                         "success": False,
                         "account_id": account.id,
@@ -943,20 +1185,56 @@ class WhatsAppService:
                         "timestamp": datetime.now()
                     })
                     
-                    # Увеличиваем задержку после ошибки, но не после последнего сообщения
+                    # Increase delay after error, but not after last message
                     if i < len(recipients) - 1:
-                        await asyncio.sleep(10)
+                        await asyncio.sleep(5)  # Longer pause after error
+                
+                # Check if QR code appeared (session may have been lost)
+                if i % 5 == 0 and i > 0:  # Check every 5 messages
+                    try:
+                        qr_elements = driver.find_elements(By.TAG_NAME, "canvas")
+                        if qr_elements:
+                            logger.error(f"QR code detected during bulk sending after {i} messages")
+                            # Update account status
+                            account.status = WhatsAppAccountStatus.PENDING
+                            await self.db.commit()
+                            
+                            # Stop sending remaining messages
+                            error_msg = "WhatsApp session lost during bulk sending"
+                            for j in range(i, len(recipients)):
+                                recipient = recipients[j]
+                                message_id = message_ids[j] if message_ids and j < len(message_ids) else None
+                                if message_id:
+                                    result = await self.db.execute(
+                                        select(WhatsAppMessage).where(WhatsAppMessage.id == message_id)
+                                    )
+                                    message = result.scalar_one_or_none()
+                                    if message:
+                                        message.status = WhatsAppMessageStatus.ERROR
+                                        message.error_message = error_msg
+                                results.append({
+                                    "success": False,
+                                    "account_id": account.id,
+                                    "recipient": recipient.phone,
+                                    "message_id": message_id,
+                                    "error": error_msg,
+                                    "timestamp": datetime.now()
+                                })
+                            await self.db.commit()
+                            break
+                    except Exception as e:
+                        logger.warning(f"Error checking for QR code during bulk sending: {str(e)}")
         except Exception as e:
             logger.error(f"Error during bulk send: {str(e)}")
         finally:
-            # Дополнительная пауза для гарантии отправки последнего сообщения
-            await asyncio.sleep(5)
+            # Additional pause to ensure sending of last message
+            await asyncio.sleep(3)
             logger.info("Final pause before closing browser")
             
-            # Закрываем браузер только после отправки всех сообщений
+            # Close browser only after sending all messages
             if driver:
                 try:
-                    # Проверяем, все ли сообщения успешно отправлены
+                    # Check how many messages were sent successfully
                     success_count = sum(1 for r in results if r.get('success', False))
                     logger.info(f"Success count before closing browser: {success_count}/{len(results)}")
                     
@@ -965,7 +1243,7 @@ class WhatsAppService:
                 except Exception as e:
                     logger.warning(f"Error closing browser after bulk send: {str(e)}")
                 
-                # Удаляем из пула
+                # Remove from pool
                 async with self._browser_pool_lock:
                     if profile_path in self._browser_pool:
                         del self._browser_pool[profile_path]
@@ -974,42 +1252,49 @@ class WhatsAppService:
         return results
 
     async def delete_account(self, account: WhatsAppAccount) -> bool:
-        """Удаляет учетную запись WhatsApp и все связанные данные"""
+        """Delete a WhatsApp account and all related data"""
         try:
-            # Удаляем все связанные сообщения
+            logger.info(f"Starting deletion of account {account.id}")
+            
+            # Delete all related messages
             result = await self.db.execute(
                 select(WhatsAppMessage).where(WhatsAppMessage.account_id == account.id)
             )
             messages = result.scalars().all()
             for message in messages:
                 await self.db.delete(message)
+            logger.info(f"Deleted {len(messages)} messages for account {account.id}")
             
-            # Закрываем и удаляем браузер из пула, если есть
+            # Close and remove browser from pool, if exists
             profile_path = account.profile_path
             if profile_path and profile_path in self._browser_pool:
                 try:
                     self._browser_pool[profile_path].quit()
-                except:
-                    pass
+                    logger.info(f"Closed browser for account {account.id}")
+                except Exception as e:
+                    logger.warning(f"Error closing browser: {str(e)}")
+                
                 async with self._browser_pool_lock:
                     if profile_path in self._browser_pool:
                         del self._browser_pool[profile_path]
             
-            # Удаляем профиль Chrome
+            # Delete Chrome profile
             profile_path = self._get_profile_path(account.profile_name)
             if os.path.exists(profile_path):
                 import shutil
                 try:
                     shutil.rmtree(profile_path)
+                    logger.info(f"Deleted profile directory: {profile_path}")
                 except Exception as e:
                     logger.warning(f"Failed to delete profile directory: {str(e)}")
             
-            # Удаляем QR код из Redis
+            # Delete QR code from Redis
             await delete_qr_code(account.id)
             
-            # Удаляем запись аккаунта
+            # Delete account record
             await self.db.delete(account)
             await self.db.commit()
+            logger.info(f"Account {account.id} deleted successfully")
             
             return True
         except Exception as e:
@@ -1018,37 +1303,49 @@ class WhatsAppService:
             return False
     
     async def check_account_status(self, account: WhatsAppAccount) -> Dict:
-        """Проверяет статус аккаунта WhatsApp"""
+        """Check WhatsApp account status"""
         driver = None
         try:
-            # Проверяем путь к профилю
+            logger.info(f"Checking status for account {account.id}")
+            # Check profile path
             if not account.profile_path:
                 account.profile_path = self._get_profile_path(account.profile_name)
                 await self.db.commit()
+                logger.info(f"Updated profile path for account {account.id}: {account.profile_path}")
             
-            # Получаем или создаем браузер
+            # Get or create browser
             driver = await self._get_or_create_browser(account.profile_path)
             
-            # Проверяем, открыт ли WhatsApp Web
+            # Check if WhatsApp Web is open
             if not driver.current_url.startswith("https://web.whatsapp.com"):
+                logger.info(f"Navigating to WhatsApp Web for account {account.id}")
                 driver.get("https://web.whatsapp.com/")
-                await asyncio.sleep(5)  # Даем время загрузиться
+                await asyncio.sleep(5)  # Allow time to load
             
-            # Проверяем наличие QR-кода
+            # Check for QR code
             qr_elements = driver.find_elements(By.TAG_NAME, "canvas")
             
-            # Проверяем наличие элементов интерфейса
+            # Check for interface elements
             chat_elements = driver.find_elements(By.CSS_SELECTOR, 
                 "#app, #main, .app, .two, [data-testid='conversation-panel'], " +
                 "[data-testid='chat-list'], .landing-wrapper")
                 
-            # Проверяем наличие индикаторов загрузки или ошибок
+            # Check for loading indicators or errors
             loading_elements = driver.find_elements(By.CSS_SELECTOR, 
                 ".landing-main, [data-testid='intro-text'], .landing-title")
                 
-            # Если есть QR-код - ждем авторизации
+            # Take a screenshot for debugging
+            try:
+                screenshot_path = os.path.join(account.profile_path, f"status_check_{int(time.time())}.png")
+                driver.save_screenshot(screenshot_path)
+                logger.info(f"Status check screenshot saved to {screenshot_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save status check screenshot: {str(e)}")
+                
+            # If QR code is present - waiting for authentication
             if qr_elements:
-                # Аккаунт не авторизован, но QR-код есть
+                logger.info(f"QR code detected for account {account.id} - needs authentication")
+                # Account not authenticated, but QR code is present
                 account.status = WhatsAppAccountStatus.PENDING
                 await self.db.commit()
                 
@@ -1059,9 +1356,10 @@ class WhatsAppService:
                     "last_check": datetime.now().isoformat()
                 }
             
-            # Если есть элементы чата и нет QR-кода - авторизованы
+            # If chat elements are present and no QR code - authenticated
             elif chat_elements and not qr_elements and not loading_elements:
-                # Аккаунт активен
+                logger.info(f"Account {account.id} is active")
+                # Account is active
                 account.status = WhatsAppAccountStatus.ACTIVE
                 if not account.account_metadata:
                     account.account_metadata = {}
@@ -1075,8 +1373,9 @@ class WhatsAppService:
                     "last_check": datetime.now().isoformat()
                 }
             
-            # Страница загружается или в неизвестном состоянии
+            # Page is loading or in unknown state
             else:
+                logger.info(f"Account {account.id} status check inconclusive - page loading or unknown state")
                 return {
                     "status": account.status,
                     "is_connected": False,
@@ -1087,7 +1386,7 @@ class WhatsAppService:
         except Exception as e:
             logger.error(f"Error checking account status: {str(e)}")
             
-            # В случае ошибки, возможно, нужно переинициализировать
+            # In case of error, may need to reinitialize
             account.status = WhatsAppAccountStatus.ERROR
             account.set_error(f"Status check failed: {str(e)}")
             await self.db.commit()
@@ -1099,53 +1398,65 @@ class WhatsAppService:
                 "last_check": datetime.now().isoformat(),
                 "needs_reinitialization": True
             }
+        finally:
+            # Don't close the driver - let it be managed by the pool
+            pass
         
     async def logout(self, account: WhatsAppAccount) -> bool:
-        """Выполняет выход из аккаунта WhatsApp"""
+        """Log out from WhatsApp account"""
         driver = None
         try:
+            logger.info(f"Starting logout for account {account.id}")
             if not account.profile_path:
                 account.profile_path = self._get_profile_path(account.profile_name)
             
-            # Получаем или создаем браузер
+            # Get or create browser
             driver = await self._get_or_create_browser(account.profile_path)
             
-            # Переходим на страницу WhatsApp
+            # Navigate to WhatsApp page
+            logger.info("Navigating to WhatsApp Web")
             driver.get("https://web.whatsapp.com/")
             await asyncio.sleep(5)
             
-            # Находим и нажимаем кнопку меню
+            # Find and click menu button
             try:
-                # Сначала ищем новый интерфейс
+                # First look for new interface
+                logger.info("Looking for menu button")
                 menu_button = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='menu'] svg, span[data-icon='menu']"))
                 )
                 menu_button.click()
+                logger.info("Clicked menu button")
                 await asyncio.sleep(1)
                 
-                # Ищем и нажимаем кнопку выхода
+                # Find and click logout button
+                logger.info("Looking for logout button")
                 logout_button = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.XPATH, "//div[contains(@aria-label, 'Log out') or contains(text(), 'Log out')]"))
                 )
                 logout_button.click()
+                logger.info("Clicked logout button")
                 await asyncio.sleep(1)
                 
-                # Подтверждаем выход
+                # Confirm logout
+                logger.info("Looking for confirmation button")
                 confirm_button = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.XPATH, "//div[contains(@aria-label, 'OK') or contains(text(), 'OK')]"))
                 )
                 confirm_button.click()
+                logger.info("Clicked confirmation button")
                 await asyncio.sleep(3)
                 
-                # Закрываем браузер
+                # Close browser
                 driver.quit()
+                logger.info("Browser closed after logout")
                 
-                # Удаляем браузер из пула
+                # Remove browser from pool
                 async with self._browser_pool_lock:
                     if account.profile_path in self._browser_pool:
                         del self._browser_pool[account.profile_path]
                 
-                # Обновляем статус аккаунта
+                # Update account status
                 account.status = WhatsAppAccountStatus.PENDING
                 if not account.account_metadata:
                     account.account_metadata = {}
