@@ -11,7 +11,7 @@ import logging
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.models import * 
-from app.api.v1 import auth_router, business_router, users_router, whatsapp_router
+from app.api.v1 import auth_router, business_router, users_router, whatsapp_router, google_auth_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -64,6 +64,7 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(business_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(whatsapp_router, prefix=settings.API_V1_STR)
+app.include_router(google_auth_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     import uvicorn

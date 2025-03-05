@@ -1,15 +1,16 @@
 import asyncio
 from datetime import datetime, timedelta
 import logging
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Optional
 
 from app.worker.celery_app import celery_app
 from app.worker.base import DatabaseTask
 from app.core.database import AsyncSessionLocal
-from app.models import BusinessSearch, SearchStatus, BusinessData
+from app.models import BusinessSearch, SearchStatus, BusinessData, GoogleOAuth
 from app.services.google_places import GooglePlacesService
+from app.services.google_people import GooglePeopleService
 from app.core.redis import (
     cache_business_search, get_cached_business_search,
     cache_place_details, get_cached_place_details,
@@ -17,6 +18,57 @@ from app.core.redis import (
 )
 
 logger = logging.getLogger(__name__)
+async def store_business_results_as_contacts_impl(
+    db: AsyncSession,
+    user_id: str,
+    search_id: str
+) -> bool:
+    """
+    Store business results as contacts in Google Contacts.
+    This implementation function is called by both the search task and
+    the dedicated contacts saving task.
+    """
+    try:
+        # Check if user has Google OAuth credentials
+        result = await db.execute(
+            select(GoogleOAuth).where(
+                GoogleOAuth.user_id == user_id,
+                GoogleOAuth.is_active == True
+            )
+        )
+        oauth = result.scalar_one_or_none()
+        
+        if not oauth:
+            logger.info(f"User {user_id} has not connected Google account, skipping contacts creation")
+            return False
+        
+        # Get business results
+        result = await db.execute(
+            select(BusinessData).where(BusinessData.search_id == search_id)
+        )
+        businesses = result.scalars().all()
+        
+        if not businesses:
+            logger.info(f"No businesses found for search {search_id}")
+            return False
+        
+        # Prepare contact data
+        contact_data_list = []
+        for business in businesses:
+            business_dict = await business.to_dict()
+            contact_data = GooglePeopleService.business_to_contact(business_dict)
+            contact_data_list.append(contact_data)
+        
+        # Create contacts in Google
+        async with GooglePeopleService(oauth_credentials=oauth.to_credentials_dict()) as people_service:
+            results = await people_service.batch_create_contacts(contact_data_list)
+            logger.info(f"Created {len(results)} contacts in Google Contacts for search {search_id}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error storing business results as contacts: {str(e)}")
+        return False
 
 async def process_place_details(
     places_service: GooglePlacesService,
@@ -211,7 +263,15 @@ def process_business_search(self, search_id: str, user_id: str):
                         )
                         await db.commit()
                 
-                search.status = SearchStatus.COMPLETED if error_count < len(all_results) else SearchStatus.FAILED
+                # Determine if search was successful
+                successful_search = error_count < len(all_results)
+                
+                # Don't automatically save to Google Contacts, just mark search as complete
+                if successful_search and processed_count > 0:
+                    logger.info(f"Search {search_id} completed with {processed_count} results, waiting for user confirmation to save to Google Contacts")
+                
+                # Update search status
+                search.status = SearchStatus.COMPLETED if successful_search else SearchStatus.FAILED
                 if search.status == SearchStatus.COMPLETED:
                     search.update_progress(100, f"Completed! Found {processed_count} businesses")
                 search.results_count = processed_count
@@ -252,6 +312,69 @@ def process_business_search(self, search_id: str, user_id: str):
                 logger.error(f"Error updating failed status: {str(update_e)}")
         
         self.retry(exc=e, countdown=20)
+
+@celery_app.task(bind=True, base=DatabaseTask)
+def store_business_results_as_contacts(self, search_id: str, user_id: str):
+    """
+    Celery task to save business search results to Google Contacts.
+    This is called after user confirmation from the frontend.
+    """
+    async def _save_contacts():
+        async with self.db_session() as db:
+            try:
+                # Use the implementation function to save contacts
+                result = await store_business_results_as_contacts_impl(db, user_id, search_id)
+                contacts_count = 0
+                
+                if result:
+                    # Get the count of businesses that were saved
+                    result = await db.execute(
+                        select(func.count()).select_from(BusinessData).where(
+                            BusinessData.search_id == search_id
+                        )
+                    )
+                    contacts_count = result.scalar_one_or_none() or 0
+                    logger.info(f"Successfully saved {contacts_count} businesses as Google Contacts")
+                    
+                # Return a dict with only simple types that can be JSON serialized
+                return {
+                    "success": bool(result),  # Ensure this is a boolean
+                    "contacts_count": int(contacts_count),  # Ensure this is an integer
+                    "message": f"Created {contacts_count} contacts in Google Contacts for search {search_id}" if result else "No contacts were saved"
+                }
+            except Exception as e:
+                logger.error(f"Error saving contacts to Google: {str(e)}")
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "message": "Failed to save contacts to Google"
+                }
+    
+    try:
+        # Execute the async function and get the result
+        result = self.run_async(_save_contacts())
+        
+        # Ensure the result is fully JSON serializable
+        try:
+            import json
+            # Test if the result is JSON serializable
+            json.dumps(result)
+            return result
+        except (TypeError, ValueError) as json_err:
+            # If serialization fails, return a simplified result
+            logger.error(f"Result serialization error: {str(json_err)}")
+            return {
+                "success": result.get("success", False) if isinstance(result, dict) else False,
+                "contacts_count": result.get("contacts_count", 0) if isinstance(result, dict) else 0,
+                "message": "Contacts saved successfully but result details could not be serialized"
+            }
+    except Exception as e:
+        logger.error(f"Error in store_business_results_as_contacts: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Task failed due to an unexpected error"
+        }
 
 @celery_app.task(bind=True, base=DatabaseTask)
 def cleanup_old_searches(self, days: int = 7):

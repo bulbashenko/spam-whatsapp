@@ -15,7 +15,14 @@ class Settings(BaseSettings):
     SECRET_KEY="REMOVED": str = "secret"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     
+    # Google Places API
     GOOGLE_PLACES_API_KEY="REMOVED": str
+    
+    # Google OAuth settings for People API
+    # Hardcoded temporarily as requested, to be moved to .env later
+    GOOGLE_OAUTH_CLIENT_ID="REMOVED": str = "317661004285-elui8453taqk694d4rgdtrkmu7sl0l9e.apps.googleusercontent.com"
+    GOOGLE_OAUTH_CLIENT_SECRET="REMOVED": str = "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"
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://nadeko.software/api/v1/google/auth/callback"
     
     POSTGRES_SERVER: str
     POSTGRES_USER: str

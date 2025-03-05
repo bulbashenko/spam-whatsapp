@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
+from celery.result import AsyncResult
 
 logger = logging.getLogger(__name__)
 from app.core.database import get_db_session
@@ -21,7 +22,7 @@ from app.schemas.business import (
     BusinessSearchStats,
     BusinessDetailsResponse
 )
-from app.worker.tasks import process_business_search
+from app.worker.tasks import process_business_search, store_business_results_as_contacts
 from app.schemas.base import PaginationParams
 
 router = APIRouter(prefix="/business", tags=["business"])
@@ -31,6 +32,99 @@ async def predict_locations(query: str):
     async with GooglePlacesService() as places_service:
         predictions = await places_service.get_location_predictions(query)
         return {"predictions": predictions}
+
+@router.post("/search/save-to-google/{search_id}")
+async def save_search_to_google_contacts(
+    search_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> Dict[str, Any]:
+    """
+    Save search results to Google Contacts after user confirmation
+    
+    Args:
+        search_id: ID of the search to save
+        background_tasks: FastAPI background tasks
+        current_user: Currently authenticated user
+        db: Database session
+    
+    Returns:
+        Task information for tracking the operation
+    """
+    # Verify the search exists and belongs to the user
+    result = await db.execute(
+        select(BusinessSearch).where(
+            BusinessSearch.id == search_id,
+            BusinessSearch.user_id == current_user.id
+        )
+    )
+    search = result.scalar_one_or_none()
+    
+    if not search:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Search not found"
+        )
+    
+    # Verify the search is completed
+    if search.status != SearchStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Search is not completed yet"
+        )
+    
+    # Get the count of businesses for the user's information
+    count_result = await db.execute(
+        select(func.count()).select_from(BusinessData).where(
+            BusinessData.search_id == search_id
+        )
+    )
+    businesses_count = count_result.scalar_one()
+    
+    # Create a background task to save to Google Contacts
+    task = store_business_results_as_contacts.delay(
+        search_id=search_id,
+        user_id=current_user.id
+    )
+    
+    return {
+        "task_id": task.id,
+        "status": "started",
+        "message": f"Saving {businesses_count} businesses to Google Contacts",
+        "count": businesses_count
+    }
+
+@router.get("/search/task/{task_id}")
+async def get_google_contacts_task_status(
+    task_id: str,
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Get the status of a Google Contacts save task
+    
+    Args:
+        task_id: ID of the task to check
+        current_user: Currently authenticated user
+    
+    Returns:
+        Task status information
+    """
+    task_result = AsyncResult(task_id)
+    
+    response = {
+        "task_id": task_id,
+        "status": task_result.status,
+        "done": task_result.ready()
+    }
+    
+    if task_result.ready():
+        if task_result.successful():
+            response["result"] = task_result.get()
+        else:
+            response["error"] = str(task_result.result)
+    
+    return response
 
 @router.post("/search", response_model=BusinessSearchResponse)
 async def create_search(

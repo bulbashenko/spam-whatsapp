@@ -38,6 +38,13 @@ class User(BaseModel):
         cascade="all, delete-orphan",
         order_by="desc(BusinessSearch.created_at)"
     )
+    
+    google_oauth = relationship(
+        "GoogleOAuth",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False  # One-to-one relationship
+    )
 
     def __repr__(self):
         return f"<User {self.email}>"
