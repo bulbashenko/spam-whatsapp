@@ -1,0 +1,455 @@
+/* Google CSS - Google Contacts specific styling */
+
+/* Google Status Bar */
+#google-status-bar {
+  background: white;
+  padding: 0.75rem var(--space-xl);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--neutral-200);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+#google-status-bar.saving-contacts {
+  background: linear-gradient(135deg, #e8f0fe 0%, #ffffff 100%);
+  box-shadow: 0 2px 12px rgba(66, 133, 244, 0.15);
+  animation: pulse 2s infinite;
+}
+
+#google-status-bar.saving-contacts .google-status i {
+  animation: spin 1.5s linear infinite;
+}
+
+.google-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  color: var(--neutral-700);
+}
+
+.google-status i {
+  color: var(--google-blue);
+}
+
+.google-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+#connect-google-btn {
+  background-color: var(--google-blue);
+}
+
+#connect-google-btn:hover {
+  background-color: #3b79e0;
+}
+
+#disconnect-google-btn {
+  background-color: var(--neutral-200);
+  color: var(--neutral-700);
+}
+
+#disconnect-google-btn:hover {
+  background-color: var(--neutral-300);
+}
+
+/* Google Contacts Section */
+#google-section {
+  margin-top: var(--space-xl);
+}
+
+.section-header h2 i.fa-google {
+  color: var(--google-blue);
+}
+
+.google-connect-container {
+  background: white;
+  padding: var(--space-2xl);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  margin-bottom: var(--space-xl);
+  text-align: center;
+}
+
+.connect-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.connect-prompt i {
+  font-size: 3.5rem;
+  color: var(--google-blue);
+  background: linear-gradient(135deg, #4285f4, #0F9D58, #F4B400, #DB4437);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--space-md);
+}
+
+.connect-prompt h3 {
+  font-size: 1.75rem;
+  color: var(--neutral-900);
+  margin-bottom: var(--space-sm);
+}
+
+.connect-prompt p {
+  font-size: 1.125rem;
+  color: var(--neutral-600);
+  max-width: 500px;
+  margin: 0 auto var(--space-xl);
+}
+
+.btn-google {
+  background: var(--google-blue);
+  color: white;
+  padding: 0.875rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 1rem;
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+.btn-google:hover {
+  background: #3367d6;
+  box-shadow: 0 6px 16px rgba(66, 133, 244, 0.4);
+}
+
+.connect-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.success-icon {
+  font-size: 3.5rem;
+  color: var(--google-green);
+  margin-bottom: var(--space-md);
+}
+
+.account-info {
+  background: var(--neutral-50);
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  margin: var(--space-md) 0;
+  width: 100%;
+  max-width: 500px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--neutral-200);
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-item .label {
+  font-weight: 500;
+  color: var(--neutral-700);
+}
+
+.info-item .value {
+  color: var(--google-blue);
+  font-weight: 500;
+}
+
+.btn-google-disconnect {
+  background: transparent;
+  color: var(--google-blue);
+  border: 2px solid var(--google-blue);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.btn-google-disconnect:hover {
+  background: rgba(66, 133, 244, 0.1);
+  color: #3367d6;
+  border-color: #3367d6;
+}
+
+.btn-google-disconnect i {
+  margin-right: var(--space-sm);
+}
+
+/* Features List */
+.features-list {
+  background: white;
+  padding: var(--space-2xl);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.features-list h3 {
+  font-size: 1.5rem;
+  color: var(--neutral-900);
+  margin-bottom: var(--space-xl);
+  position: relative;
+  display: inline-block;
+}
+
+.features-list h3:after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  width: 50px;
+  height: 4px;
+  background: linear-gradient(to right, var(--google-blue), var(--google-green));
+  border-radius: var(--radius-full);
+}
+
+.features-list ul {
+  list-style: none;
+  padding: 0;
+}
+
+.features-list li {
+  display: flex;
+  gap: var(--space-lg);
+  padding: var(--space-lg) 0;
+  border-bottom: 1px solid var(--neutral-200);
+}
+
+.features-list li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.features-list li i {
+  color: var(--google-blue);
+  font-size: 1.5rem;
+  margin-top: 0.25rem;
+  background: #e8f0fe;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feature-text {
+  flex: 1;
+}
+
+.feature-text strong {
+  font-size: 1.25rem;
+  color: var(--neutral-900);
+  display: block;
+  margin-bottom: var(--space-sm);
+}
+
+.feature-text p {
+  color: var(--neutral-600);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Google Contacts Confirmation Modal */
+#google-contacts-modal {
+  z-index: 1100; /* Higher than other modals */
+}
+
+#google-contacts-modal.show {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+#google-contacts-modal .modal-content {
+  border-top: 5px solid var(--google-blue);
+  max-width: 500px;
+  box-shadow: 0 10px 25px rgba(66, 133, 244, 0.25), 0 5px 10px rgba(0, 0, 0, 0.15);
+  transform: scale(1.01); /* Slightly larger for emphasis */
+  animation: google-modal-appear 0.3s ease-out forwards;
+}
+
+@keyframes google-modal-appear {
+  0% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.01);
+    opacity: 1;
+  }
+}
+
+#google-contacts-modal .modal-header {
+  border-bottom: 1px solid #e8f0fe;
+  padding-bottom: 1rem;
+}
+
+#google-contacts-modal .modal-header h2 {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+  color: var(--google-blue);
+}
+
+#google-contacts-modal .modal-header h2 i {
+  margin-right: 0.5rem;
+  font-size: 1.75rem;
+}
+
+#google-contacts-modal .modal-body {
+  padding: 1.5rem 1rem;
+}
+
+#google-contacts-modal .highlighted-number {
+  color: var(--google-blue);
+  font-weight: bold;
+  font-size: 1.2em;
+  animation: pulse-number 2s infinite;
+  display: inline-block;
+}
+
+@keyframes pulse-number {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+#google-contacts-modal .warning-text {
+  background-color: #e8f0fe;
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-top: 1rem;
+  border-left: 4px solid var(--google-blue);
+}
+
+#google-contacts-modal .warning-text p {
+  margin: 0;
+  color: var(--neutral-700);
+}
+
+#google-contacts-modal .warning-text i {
+  color: var(--google-blue);
+  margin-right: 0.5rem;
+}
+
+#google-contacts-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e8f0fe;
+}
+
+#confirm-save-contacts {
+  background-color: var(--google-blue);
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+#confirm-save-contacts:hover {
+  background-color: #3367d6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(66, 133, 244, 0.4);
+}
+
+#confirm-save-contacts:active {
+  transform: translateY(0);
+}
+
+#cancel-save-contacts {
+  background-color: var(--neutral-200);
+  color: var(--neutral-700);
+  transition: all 0.2s ease;
+}
+
+#cancel-save-contacts:hover {
+  background-color: var(--neutral-300);
+}
+
+/* Saving Contacts Animation */
+#google-status-bar.saving-contacts {
+  background: linear-gradient(135deg, #e8f0fe 0%, #ffffff 100%);
+  box-shadow: 0 2px 12px rgba(66, 133, 244, 0.2);
+  animation: pulse 2s infinite;
+}
+
+#google-status-bar.saving-contacts .google-status i {
+  animation: spin 1.5s linear infinite;
+}
+
+#google-status-bar.saving-contacts .google-status::after {
+  content: " - Сохранение контактов...";
+  color: var(--google-blue);
+  font-weight: 500;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 2px 12px rgba(66, 133, 244, 0.2);
+  }
+  50% {
+    box-shadow: 0 2px 12px rgba(66, 133, 244, 0.5);
+  }
+  100% {
+    box-shadow: 0 2px 12px rgba(66, 133, 244, 0.2);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Google Integration Responsive Design */
+@media (max-width: 768px) {
+  #google-status-bar {
+    flex-direction: column;
+    gap: var(--space-md);
+    padding: var(--space-md);
+  }
+  
+  .google-connect-container {
+    padding: var(--space-lg);
+  }
+  
+  .connect-prompt i, 
+  .success-icon {
+    font-size: 2.5rem;
+  }
+  
+  .connect-prompt h3 {
+    font-size: 1.5rem;
+  }
+  
+  .features-list li {
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+  
+  .features-list li i {
+    margin-right: auto;
+    margin-left: auto;
+  }
+}

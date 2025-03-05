@@ -8,6 +8,7 @@ class AuthManager {
         
         this.loginForm = document.getElementById('login-form');
         this.registerForm = document.getElementById('register-form');
+        this.authFormsContainer = document.getElementById('auth-forms');
         this.loginBtn = document.getElementById('login-btn');
         this.registerBtn = document.getElementById('register-btn');
         this.logoutBtn = document.getElementById('logout-btn');
@@ -68,12 +69,18 @@ class AuthManager {
             }
         });
 
-        this.loginBtn.addEventListener('click', () => {
+        this.loginBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Stop event from bubbling up to document
+            e.preventDefault(); // Prevent default behavior
+            this.authFormsContainer.classList.remove('hidden');
             this.registerForm.classList.add('hidden');
             this.loginForm.classList.toggle('hidden');
         });
 
-        this.registerBtn.addEventListener('click', () => {
+        this.registerBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Stop event from bubbling up to document
+            e.preventDefault(); // Prevent default behavior
+            this.authFormsContainer.classList.remove('hidden');
             this.loginForm.classList.add('hidden');
             this.registerForm.classList.toggle('hidden');
         });
@@ -157,6 +164,7 @@ class AuthManager {
             this.userEmail.textContent = this.currentUser.email;
             this.loginForm.classList.add('hidden');
             this.registerForm.classList.add('hidden');
+            this.authFormsContainer.classList.add('hidden');
         } else {
             this.loginBtn.classList.remove('hidden');
             this.registerBtn.classList.remove('hidden');

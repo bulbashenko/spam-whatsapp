@@ -10,7 +10,10 @@ class SearchManager {
         this.totalResults = 0;
         this.locationDebounceTimer = null;
         this.pollInterval = null;
+        this.saveGoogleContactsTaskId = null;
+        this.saveGoogleContactsInterval = null;
         
+        // Reference to the business details modal
         this.detailsModal = document.createElement('div');
         this.detailsModal.className = 'modal';
         this.detailsModal.innerHTML = `
@@ -20,6 +23,9 @@ class SearchManager {
             </div>
         `;
         document.body.appendChild(this.detailsModal);
+        
+        // Reference to the Google Contacts confirmation modal (defined in HTML)
+        this.googleContactsModal = document.getElementById('google-contacts-modal');
         
         const closeBtn = this.detailsModal.querySelector('.close');
         closeBtn.addEventListener('click', () => {
@@ -115,24 +121,100 @@ class SearchManager {
         
         try {
             const search = await api.getSearch(this.currentSearch.id);
+            const message = search.last_message || `Found ${search.results_count || 0} results...`;
             
-            if (search.status === 'completed') {
-                clearInterval(this.pollInterval);
-                this.progressText.textContent = search.last_message || 'Search completed!';
-                await this.loadResults();
-                this.progressContainer.classList.add('hidden');
-                this.resultsContainer.classList.remove('hidden');
+            // Check if the message indicates Google Contacts saving
+            const isSavingContacts = message.includes('Google Contacts') || 
+                                     message.includes('сохранение контактов') || 
+                                     message.includes('Сохранение контактов');
+            
+        if (search.status === 'completed') {
+            clearInterval(this.pollInterval);
+            this.progressText.textContent = search.last_message || 'Search completed!';
+            
+            await this.loadResults();
+            this.progressContainer.classList.add('hidden');
+            this.resultsContainer.classList.remove('hidden');
+            
+            // No longer showing confirmation modal after search
+            console.log('Search completed, results displayed');
             } else if (search.status === 'failed') {
                 clearInterval(this.pollInterval);
                 this.showError(search.error_message || 'Search failed');
             } else {
                 const progress = search.progress || 0;
-                const message = search.last_message || `Found ${search.results_count || 0} results...`;
                 this.updateProgress(progress, message);
+                
+                // Track if contacts are being saved
+                if (isSavingContacts) {
+                    this.wasContactSaving = true;
+                    this.showGoogleIndicator();
+                }
             }
         } catch (error) {
             clearInterval(this.pollInterval);
             this.showError('Failed to check search status');
+        }
+    }
+    
+    
+    // Save search results to Google Contacts
+    async saveToGoogleContacts() {
+        if (!this.currentSearch) return;
+        
+        try {
+            // Show a toast indicating we're starting the process
+            this.showToast('Starting to save contacts to Google...', 'info', true);
+            
+            // Call the API to start the saving process
+            const response = await api.saveSearchToGoogleContacts(this.currentSearch.id);
+            this.saveGoogleContactsTaskId = response.task_id;
+            
+            // Show an indicator that saving is in progress
+            this.showGoogleIndicator();
+            
+            // Start polling for the status of the save task
+            this.saveGoogleContactsInterval = setInterval(() => {
+                this.pollSaveContactsStatus();
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Failed to save to Google Contacts:', error);
+            this.showToast('Failed to save to Google Contacts: ' + error.message, 'error', true);
+        }
+    }
+    
+    // Poll for the status of the save contacts task
+    async pollSaveContactsStatus() {
+        if (!this.saveGoogleContactsTaskId) return;
+        
+        try {
+            const taskStatus = await api.getGoogleContactsTaskStatus(this.saveGoogleContactsTaskId);
+            
+            if (taskStatus.done) {
+                clearInterval(this.saveGoogleContactsInterval);
+                this.saveGoogleContactsInterval = null;
+                
+                if (taskStatus.result && taskStatus.result.success) {
+                    const count = taskStatus.result.contacts_count || 0;
+                    this.showToast(`Successfully saved ${count} contacts to Google Contacts`, 'success', true);
+                } else {
+                    this.showToast('Failed to save contacts: ' + (taskStatus.error || 'Unknown error'), 'error', true);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking save contacts status:', error);
+        }
+    }
+    
+    // Shows a Google-styled toast with the Google logo
+    showGoogleIndicator() {
+        const statusBar = document.getElementById('google-status-bar');
+        if (statusBar && !statusBar.classList.contains('hidden')) {
+            statusBar.classList.add('saving-contacts');
+            setTimeout(() => {
+                statusBar.classList.remove('saving-contacts');
+            }, 3000);
         }
     }
 
@@ -177,6 +259,9 @@ class SearchManager {
             this.renderResults();
             this.updatePagination();
             
+            // Add a Google Contacts export button if Google is connected
+            this.updateGoogleContactsExportButton();
+            
             this.progressContainer.classList.add('hidden');
             this.resultsContainer.classList.remove('hidden');
         } catch (error) {
@@ -209,6 +294,49 @@ class SearchManager {
         });
     }
 
+    // Add the Google Contacts export button
+    updateGoogleContactsExportButton() {
+        // Only proceed if Google integration is available
+        if (!window.googleContactsManager || !window.googleContactsManager.isConnected) {
+            console.log('Google Contacts integration not available, not showing export button');
+            return;
+        }
+        
+        // Check if the export controls container exists
+        const exportControls = document.querySelector('.export-controls');
+        if (!exportControls) {
+            console.error('Export controls container not found');
+            return;
+        }
+        
+        // Remove existing button if it exists
+        const existingBtn = document.getElementById('export-google-contacts');
+        if (existingBtn) {
+            existingBtn.remove();
+        }
+        
+        // Create the new export button
+        const googleExportBtn = document.createElement('button');
+        googleExportBtn.id = 'export-google-contacts';
+        googleExportBtn.className = 'btn';
+        googleExportBtn.title = 'Export to Google Contacts';
+        googleExportBtn.innerHTML = '<i class="fab fa-google"></i> Google Contacts';
+        googleExportBtn.style.backgroundColor = '#4285F4'; // Google blue
+        googleExportBtn.style.color = 'white';
+        
+        // Add click event
+        googleExportBtn.addEventListener('click', async () => {
+            const count = this.totalResults;
+            if (confirm(`Do you want to save ${count} business contacts to your Google Contacts?`)) {
+                await this.saveToGoogleContacts();
+            }
+        });
+        
+        // Add to the export controls
+        exportControls.appendChild(googleExportBtn);
+        console.log('Google Contacts export button added');
+    }
+    
     filterResults() {
         const searchTerm = this.tableSearch.value.toLowerCase();
         const rows = this.resultsBody.getElementsByTagName('tr');
@@ -248,10 +376,20 @@ class SearchManager {
     }
 
     resetSearch() {
+        // Ensure scrolling is always restored on reset
+        document.body.style.overflow = '';
+        
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
         }
+        
+        // Also clear the save contacts interval if running
+        if (this.saveGoogleContactsInterval) {
+            clearInterval(this.saveGoogleContactsInterval);
+            this.saveGoogleContactsInterval = null;
+        }
+        
         this.currentSearch = null;
         this.currentPage = 1;
         this.searchResults = [];
@@ -259,6 +397,7 @@ class SearchManager {
         this.progressBar.style.width = '0%';
         this.progressText.textContent = '';
         this.resultsContainer.classList.add('hidden');
+        this.wasContactSaving = false;
     }
 
     async exportResults(format) {
@@ -325,29 +464,42 @@ class SearchManager {
             `;
             
             document.getElementById('business-details').innerHTML = detailsHtml;
+            // Make sure the modal is visible
             this.detailsModal.style.display = 'block';
+            this.detailsModal.style.opacity = '1';
+            this.detailsModal.style.visibility = 'visible';
+            this.detailsModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // Prevent scrolling
             
         } catch (error) {
             this.showToast(error.message, 'error');
         }
     }
 
-    showToast(message, type = 'info') {
+    showToast(message, type = 'info', isGoogle = false) {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        toast.textContent = message;
+        
+        if (isGoogle) {
+            toast.innerHTML = `
+                <i class="fab fa-google" style="margin-right: 8px;"></i>
+                ${message}
+            `;
+        } else {
+            toast.textContent = message;
+        }
         
         const container = document.getElementById('toast-container');
         container.appendChild(toast);
         
         setTimeout(() => {
             toast.remove();
-        }, 3000);
+        }, 5000); // Show Google notifications longer
     }
 
     async handleLocationInput() {
         const query = this.locationInput.value.trim();
-        if (query.length < 2) {
+        if (query.length < 1) { // Changed to trigger after 1 character
             this.locationSuggestions.style.display = 'none';
             return;
         }
@@ -360,25 +512,47 @@ class SearchManager {
                 this.locationSuggestions.style.display = 'none';
             }
         } catch (error) {
+            console.error('Error fetching location predictions:', error);
             this.locationSuggestions.style.display = 'none';
         }
     }
 
     showLocationSuggestions(predictions) {
         this.locationSuggestions.innerHTML = '';
+        
+        // Add a header for city suggestions
+        const header = document.createElement('div');
+        header.className = 'location-suggestion-header';
+        header.textContent = 'Города';
+        this.locationSuggestions.appendChild(header);
+        
         predictions.forEach(prediction => {
             const div = document.createElement('div');
             div.className = 'location-suggestion';
             div.innerHTML = `
-                <div class="main-text">${prediction.main_text}</div>
-                <div class="secondary-text">${prediction.secondary_text}</div>
+                <i class="fas fa-map-marker-alt"></i>
+                <div class="suggestion-content">
+                    <div class="main-text">${prediction.main_text}</div>
+                    <div class="secondary-text">${prediction.secondary_text ? '<span style="margin-right: 4px;">·</span> ' + prediction.secondary_text : ''}</div>
+                </div>
             `;
             div.addEventListener('click', () => {
                 this.locationInput.value = prediction.description;
                 this.locationSuggestions.style.display = 'none';
             });
+            
+            // Add hover effect
+            div.addEventListener('mouseenter', () => {
+                div.classList.add('hover');
+            });
+            
+            div.addEventListener('mouseleave', () => {
+                div.classList.remove('hover');
+            });
+            
             this.locationSuggestions.appendChild(div);
         });
+        
         this.locationSuggestions.style.display = 'block';
     }
 }
