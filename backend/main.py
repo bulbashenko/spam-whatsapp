@@ -42,8 +42,9 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
-app.mount("/static", StaticFiles(directory=Path("../frontend/static")), name="static")
-templates = Jinja2Templates(directory=Path("../frontend/templates"))
+app.mount("/static", StaticFiles(directory=Path("/app/frontend/static")), name="static")
+templates = Jinja2Templates(directory=Path("/app/frontend/templates"))
+
 
 
 @app.get("/", response_class=HTMLResponse)
