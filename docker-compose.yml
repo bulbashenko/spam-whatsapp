@@ -31,12 +31,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "9000:9000"
     volumes:
       - ./backend:/app
       - ./frontend:/app/frontend
     command: uvicorn main:app --host 0.0.0.0 --port 9000
+    networks:
+      - fastapi_network
+
+  redis:
+    image: redis:latest
+    container_name: fastapi_redis
+    restart: always
+    ports:
+      - "6379:6379"
     networks:
       - fastapi_network
 
