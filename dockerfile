@@ -24,6 +24,9 @@ RUN apt-get update && \
     libasound2 \
     fonts-liberation \
     libappindicator3-1 \
+    libgbm1 \
+    libvulkan1 \
+    xdg-utils \
     --no-install-recommends && \
     # Descargar e instalar Google Chrome versión 114
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
