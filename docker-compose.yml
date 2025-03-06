@@ -11,11 +11,16 @@ services:
     env_file:
       - .env
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - fastapi_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   fastapi:
     build: .
@@ -24,13 +29,13 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "9000:9000"
     volumes:
       - ./backend:/app
-      - ./frontend:/app/frontend
-    command: uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 9000
     networks:
       - fastapi_network
 
