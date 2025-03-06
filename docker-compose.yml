@@ -50,6 +50,13 @@ services:
       - "6379:6379"
     networks:
       - fastapi_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
 
 volumes:
   postgres_data:
