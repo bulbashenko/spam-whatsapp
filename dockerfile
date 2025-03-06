@@ -24,14 +24,13 @@ RUN apt-get update && \
     libasound2 \
     fonts-liberation \
     libappindicator3-1 \
-    libindicator7 \
     --no-install-recommends && \
     # Descargar e instalar Google Chrome versión 114
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
     dpkg -i google-chrome-stable_current_amd64.deb && \
     apt-get install -y -f && \
     rm google-chrome-stable_current_amd64.deb && \
-    # Descargar e instalar ChromeDriver versión 114
+    # Descargar e instalar ChromeDriver versión 114.0.5735.90
     wget https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip && \
     unzip chromedriver_linux64.zip && \
     mv chromedriver /usr/local/bin/ && \
