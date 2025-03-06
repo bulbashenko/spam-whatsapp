@@ -4,7 +4,9 @@ from app.core.config import settings
 import json
 from typing import Optional, Dict, List, Any
 from datetime import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 
 try:
     redis = aioredis.from_url(
