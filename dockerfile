@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y \
     libnss3 \
     libasound2 \
     fonts-liberation \
+    libgbm1 \
+    libvulkan1 \
+    xdg-utils \
     --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
