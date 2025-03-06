@@ -26,9 +26,8 @@ RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.d
     && apt-get install -y -f \
     && rm google-chrome-stable_current_amd64.deb
 
-# Install ChromeDriver (make sure the version matches the Chrome version)
-RUN LATEST_CHROMEDRIVER_VERSION=$(wget -qO- https://chromedriver.storage.googleapis.com/LATEST_RELEASE) \
-    && wget https://chromedriver.storage.googleapis.com/$LATEST_CHROMEDRIVER_VERSION/chromedriver_linux64.zip \
+# Install ChromeDriver that matches Chrome version 134
+RUN wget https://chromedriver.storage.googleapis.com/134.0.6998.35/chromedriver_linux64.zip \
     && unzip chromedriver_linux64.zip \
     && mv chromedriver /usr/local/bin/ \
     && chmod +x /usr/local/bin/chromedriver \
