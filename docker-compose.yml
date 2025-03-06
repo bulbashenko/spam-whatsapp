@@ -35,6 +35,7 @@ services:
       - "9000:9000"
     volumes:
       - ./backend:/app
+      - ./frontend:/app/frontend
     command: uvicorn main:app --host 0.0.0.0 --port 9000
     networks:
       - fastapi_network
