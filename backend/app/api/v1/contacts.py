@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app import schemas
-from app.models import Contact
 from app.core.database import get_db_session
 
 app = FastAPI()
