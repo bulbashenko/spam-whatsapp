@@ -4,19 +4,45 @@ from typing import List, Optional
 import app.models as models
 import app.schemas.contacts as schemas
 from app.core.database import get_db
+from app.models import Contact
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app import schemas
+from app.models import Contact
+from app.core.database import get_db_session
 
 app = FastAPI()
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
-# Crear un nuevo contacto
-@router.post("/contacts/", response_model=schemas.Contact)
-async def create_contact(contact: schemas.ContactCreate, db: Session = Depends(get_db)):
-    db_contact = models.Contact(**contact.dict())
-    db.add(db_contact)
-    db.commit()
-    db.refresh(db_contact)
-    return db_contact
+@router.post("/contacts/", response_model=schemas.Contact, status_code=status.HTTP_201_CREATED)
+async def create_contact(
+    contact_data: schemas.ContactCreate,
+    db: AsyncSession = Depends(get_db_session)
+):
+    stmt = select(Contact).where(Contact.email == contact_data.email)
+    result = await db.execute(stmt)
+    existing_contact = result.scalar_one_or_none()
+    if existing_contact:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contact with this email already exists"
+        )
+    
+    # Crear un nuevo contacto
+    new_contact = Contact(
+        email=contact_data.email,
+        name=contact_data.name,
+        phone_number=contact_data.phone_number
+    )
+    
+    db.add(new_contact)
+    await db.commit()  
+    await db.refresh(new_contact)
+    
+    return new_contact  # Retorna el contacto creado
 
 # Obtener contactos con filtros
 @router.get("/contacts/", response_model=List[schemas.Contact])
