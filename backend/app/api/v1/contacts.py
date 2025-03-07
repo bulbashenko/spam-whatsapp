@@ -7,7 +7,7 @@ from app.core.database import get_db
 
 app = FastAPI()
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
 # Crear un nuevo contacto
 @router.post("/contacts/", response_model=schemas.Contact)
