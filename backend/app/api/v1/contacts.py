@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, APIRouter
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import app.models as models
-import app.schemas as schemas
+import app.schemas.contacts as schemas
 from app.core.database import get_db
 
 app = FastAPI()
