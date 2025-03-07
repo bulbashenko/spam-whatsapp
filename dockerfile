@@ -28,17 +28,6 @@ RUN apt-get update && \
     libvulkan1 \
     xdg-utils \
     --no-install-recommends && \
-    # Descargar e instalar Google Chrome versión 114
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-    dpkg -i google-chrome-stable_current_amd64.deb && \
-    apt-get install -y -f && \
-    rm google-chrome-stable_current_amd64.deb && \
-    # Descargar e instalar ChromeDriver versión 114.0.5735.90
-    wget https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip && \
-    unzip chromedriver_linux64.zip && \
-    mv chromedriver /usr/local/bin/ && \
-    chmod +x /usr/local/bin/chromedriver && \
-    rm chromedriver_linux64.zip && \
     # Limpiar cache de apt para reducir el tamaño de la imagen
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
