@@ -9,6 +9,7 @@ from .business_search import BusinessSearch, SearchStatus
 from .business_data import BusinessData
 from .whatsapp import WhatsAppAccount, WhatsAppAccountStatus, WhatsAppMessage, WhatsAppMessageStatus
 from .google_oauth import GoogleOAuth
+from .contacts import Contact
 
 # This ensures all models are properly registered with SQLAlchemy
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     'WhatsAppAccountStatus',
     'WhatsAppMessage',
     'WhatsAppMessageStatus',
-    'GoogleOAuth'
+    'GoogleOAuth',
+    'Contact',
 ]
