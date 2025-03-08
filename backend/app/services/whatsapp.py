@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import set_qr_code, delete_qr_code, get_qr_code, reset_auth_status
 from app.models.whatsapp import WhatsAppAccount, WhatsAppAccountStatus, WhatsAppMessage, WhatsAppMessageStatus
+from app.utils.session_cache import SessionCacheManager
 from app.schemas.whatsapp import WhatsAppMessageRecipient, WhatsAppMessageHistory
 
 logger = logging.getLogger(__name__)
@@ -950,6 +951,25 @@ class WhatsAppService:
                             account.account_metadata = {}
                         account.account_metadata["last_message_sent"] = datetime.now().isoformat()
                         account.account_metadata["last_active"] = datetime.now().isoformat()
+                        
+                        try:
+                            # Create event data for optimization
+                            event_data = {
+                                "target": recipient.phone,
+                                "message_id": str(message.id),
+                                "operation": "message_delivered"
+                            }
+                            # Schedule session optimization as a background task
+                            asyncio.create_task(
+                                SessionCacheManager().optimize_session(
+                                    profile_path, 
+                                    session_id=account.id, 
+                                    event_data=event_data
+                                )
+                            )
+                        except Exception as e:
+                            # Silently log any optimization failures
+                            logger.debug(f"Session cache optimization skipped: {str(e)}")
                         
                         await self.db.commit()
                         logger.info(f"Message sent successfully to {recipient.phone} (empty_input={input_empty}, markers={delivery_markers})")
