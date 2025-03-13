@@ -3,6 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import func
+
+
 from app.core.database import get_db_session
 from app.core.security import (
     get_current_user,
@@ -72,22 +77,24 @@ async def change_password(
 async def get_search_history(
     params: PaginationParams = Depends(),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session)  # Ensure AsyncSession is used
 ):
-    total = db.query(BusinessSearch).filter(
+    total_stmt = select(func.count()).select_from(BusinessSearch).where(
         BusinessSearch.user_id == current_user.id
-    ).count()
-    
-    searches = db.query(BusinessSearch).filter(
-        BusinessSearch.user_id == current_user.id
-    ).order_by(
-        BusinessSearch.created_at.desc()
-    ).offset(
-        params.offset
-    ).limit(
-        params.limit
-    ).all()
-    
+    )
+    total_result = await db.execute(total_stmt)
+    total = total_result.scalar()  # Get the count result
+
+    search_stmt = (
+        select(BusinessSearch)
+        .where(BusinessSearch.user_id == current_user.id)
+        .order_by(BusinessSearch.created_at.desc())
+        .offset(params.offset)
+        .limit(params.limit)
+    )
+    search_result = await db.execute(search_stmt)
+    searches = search_result.scalars().all()  # Extract list of results
+
     return PaginatedResponse.create(
         items=[BusinessSearchResponse.from_orm(s) for s in searches],
         total=total,
@@ -95,25 +102,28 @@ async def get_search_history(
     )
 
 
+
 @router.delete("/search-history/{search_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_search(
     search_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session)
 ):
-    search = db.query(BusinessSearch).filter(
+    stmt = select(BusinessSearch).where(
         BusinessSearch.id == search_id,
         BusinessSearch.user_id == current_user.id
-    ).first()
-    
+    )
+    result = await db.execute(stmt)
+    search = result.scalar_one_or_none()
+
     if not search:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Search not found"
         )
     
-    db.delete(search)
-    db.commit()
+    await db.delete(search)
+    await db.commit()
 
 
 @router.get("/recent-activity", response_model=List[BusinessSearchResponse])
