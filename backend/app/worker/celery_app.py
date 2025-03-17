@@ -53,6 +53,3 @@ def debug_task(self):
     """Debug task to verify Celery is working."""
     logger.info(f"Request: {self.request!r}")
     return "Debug task completed"
-
-if __name__ == "__main__":
-    celery_app.start()

@@ -57,5 +57,23 @@ services:
     networks:
       - fastapi_network
 
+  celery:
+    build: .
+    container_name: fastapi_celery
+    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - CELERY_BROKER_URL=redis://fastapi_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://fastapi_redis:6379/0
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info"]
+    volumes:
+      - ./backend:/app
+    networks:
+      - fastapi_network
+    env_file:
+      - .env
+
 volumes:
   postgres_data:

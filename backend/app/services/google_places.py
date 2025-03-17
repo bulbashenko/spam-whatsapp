@@ -57,6 +57,10 @@ class GooglePlacesService:
                         
                         if response.status == 200:
                             status = data.get("status")
+                            
+                            logger.info(f"Google Places API error: {status}")
+                            logger.debug(f"Response data: {data}")
+                            
                             if status == "OK":
                                 return data
                             elif status == "ZERO_RESULTS":
@@ -81,6 +85,10 @@ class GooglePlacesService:
                             wait_time = int(response.headers.get("Retry-After", self.retry_delay))
                             await asyncio.sleep(wait_time)
                             continue
+                        
+                        logger.info(f"Request failed with status code: {response.status}")
+                        logger.debug(f"Response data: {data}")
+                        
                             
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 logger.error(f"Request error: {str(e)}")
