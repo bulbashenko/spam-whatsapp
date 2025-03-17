@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     
     # Google OAuth settings for People API
     # Hardcoded temporarily as requested, to be moved to .env later
-    GOOGLE_OAUTH_CLIENT_ID="REMOVED": str = "317661004285-elui8453taqk694d4rgdtrkmu7sl0l9e.apps.googleusercontent.com"
-    GOOGLE_OAUTH_CLIENT_SECRET="REMOVED": str = "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"
-    GOOGLE_OAUTH_REDIRECT_URI: str = "http://nadeko.software/api/v1/google/auth/callback"
+    GOOGLE_OAUTH_CLIENT_ID="REMOVED": str = "112719833747-hmrmjg9clho50co4noh3if7k8kj2gbql.apps.googleusercontent.com"
+    GOOGLE_OAUTH_CLIENT_SECRET="REMOVED": str = "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"
+    GOOGLE_OAUTH_REDIRECT_URI: str = "https://moton.agency/api/v1/google/auth/callback"
     
     POSTGRES_SERVER: str
     POSTGRES_USER: str
