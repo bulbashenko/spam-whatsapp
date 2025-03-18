@@ -69,7 +69,7 @@ class GooglePlacesService:
                                     
                                     data["social_media"] = SocialMedia
                                 except Exception as e:
-                                    logger.error(f"Social media error: {str(e)}")
+                                    logger.error(f"Social media error data: {str(e)}")
                                 return data
                             elif status == "ZERO_RESULTS":
                                 return {"results": []}
