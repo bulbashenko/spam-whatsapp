@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     
     
     # SERAPI KEY
-    SERPAPI_API_KEY="REMOVED": str
+    SERPER_API_KEY="REMOVED": str
     
     @computed_field
     def POSTGRES_DATABASE_URL(self) -> str:
