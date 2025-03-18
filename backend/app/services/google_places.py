@@ -63,8 +63,11 @@ class GooglePlacesService:
                             logger.info(f"Response data: {data}")
                             
                             if status == "OK":
-                                SocialMedia = SocialMediaService().search_social_profiles(data.get("results", {}).get("name"))
-                                logger.info(f"Social media profiles: {SocialMedia}")
+                                try:
+                                    SocialMedia = SocialMediaService().search_social_profiles(data.get("results", {})[0].get("name", ""))
+                                    logger.info(f"Social media profiles: {SocialMedia}")
+                                except Exception as e:
+                                    logger.error(f"Social media error: {str(e)}")
                                 # data["social_media"] = SocialMedia
                                 return data
                             elif status == "ZERO_RESULTS":
