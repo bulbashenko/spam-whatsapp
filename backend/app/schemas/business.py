@@ -60,6 +60,7 @@ class BusinessDataBase(BaseModel):
     types: List[str]
     opening_hours: Optional[Dict[str, Any]] = None
     photos: Optional[List[str]] = None
+    social_media: Optional[Dict[str, Any]] = None
 
 
 class BusinessDataResponse(ResponseSchema, BusinessDataBase):
