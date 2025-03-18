@@ -35,6 +35,8 @@ class BusinessData(BaseModel):
     
     search_id = Column(String(36), ForeignKey("business_searches.id"), nullable=False)
     search = relationship("BusinessSearch", back_populates="results")
+    
+    social_media = Column(JSON, nullable=True)
 
     __table_args__ = (
         Index('idx_location', 'latitude', 'longitude'),

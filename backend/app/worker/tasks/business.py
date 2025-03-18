@@ -133,7 +133,8 @@ async def process_place_details(
                         weekday_text=place_data.get("weekday_text", []),
                         reviews=place_data.get("reviews", []),
                         url=place_data.get("url"),
-                        raw_data=place_data.get("raw_data", {})
+                        raw_data=place_data.get("raw_data", {}),
+                        social_media=place_data.get("social_media", {})
                     )
                     business.update_search_text()
                     db.add(business)
