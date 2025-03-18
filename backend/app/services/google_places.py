@@ -68,6 +68,7 @@ class GooglePlacesService:
                                     logger.info(f"Social media profiles: {SocialMedia}")
                                     
                                     data["social_media"] = SocialMedia
+                                    logger.info(f"Data after adding social media: {data}")
                                 except Exception as e:
                                     logger.error(f"Social media error data: {str(e)}")
                                 return data
