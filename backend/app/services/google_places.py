@@ -149,7 +149,7 @@ class GooglePlacesService:
             "place_id": place_id,
             "fields": "name,formatted_address,geometry,type,business_status,"
                      "formatted_phone_number,international_phone_number,website,rating,"
-                     "user_ratings_total,price_level,opening_hours,photos,reviews,url"
+                     "user_ratings_total,price_level,opening_hours,photos,reviews,url,social_media"
         }
         
         return await self._make_request("details/json", params)
