@@ -113,6 +113,7 @@ async def process_place_details(
                     existing_business.update_search_text()
                     business = existing_business
                 else:
+                    logger.info(f"Place Data: {place_data}")
                     business = BusinessData(
                         search_id=search_id,
                         place_id=place_data["place_id"],
