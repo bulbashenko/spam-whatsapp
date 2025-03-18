@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_PORT: str
     
+    
+    # SERAPI KEY
+    SERPAPI_API_KEY="REMOVED": str
+    
     @computed_field
     def POSTGRES_DATABASE_URL(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD="REMOVED"}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

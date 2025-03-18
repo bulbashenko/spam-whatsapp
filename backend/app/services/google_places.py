@@ -5,6 +5,7 @@ from datetime import datetime
 import logging
 from app.core.config import settings
 from fastapi import HTTPException
+from app.services.socialmedia import SocialMediaService
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +60,12 @@ class GooglePlacesService:
                             status = data.get("status")
                             
                             logger.info(f"Google Places API error: {status}")
-                            logger.debug(f"Response data: {data}")
+                            logger.info(f"Response data: {data}")
                             
                             if status == "OK":
+                                SocialMedia = SocialMediaService().search_social_profiles(data.get("results")[0].get("name"))
+                                
+                                data["social_media"] = SocialMedia
                                 return data
                             elif status == "ZERO_RESULTS":
                                 return {"results": []}
