@@ -93,7 +93,7 @@ async def process_place_details(
                 return None
             
             logger.info("\n\n\n\n\n\n\n\n DETAILS: \n\n\n\n\n\n\n\n")
-            logger.info(details['result'][0]['social_media'])
+            logger.info(details['result']['social_media'])
                 
             # Cache the results
             await cache_place_details(place_id, details["result"])
