@@ -6,7 +6,7 @@ import logging
 from app.core.config import settings
 from fastapi import HTTPException
 from app.services.socialmedia import SocialMediaService
-from app.services.contacts import create_contact
+from app.services.contacts import create_contact_via_api
 from app.core.database import get_db_session 
 
 logger = logging.getLogger(__name__)
@@ -66,15 +66,13 @@ class GooglePlacesService:
                             
                             if status == "OK":
                                 try:
-                                    contact_name = data.get("name", "")
-                                    contact_company_tag = data.get("company_tag", "")
+                                    contact_name = data.get("result", "")[0].get("name", "")
+                                    contact_company_tag = data.get("result", "")[0].get("name", "")
                                     contact_email = data.get("email", "")
                                     contact_phone = data.get("phone", "")
 
                                     # Get the db session and call create_contact
-                                    async with get_db_session() as db:
-                                        contact = create_contact(db, contact_name, contact_company_tag, contact_email, contact_phone)
-                                        logger.info(f"Contact created: {contact.name}")
+                                    await create_contact_via_api(contact_name, contact_company_tag, contact_email, contact_phone)
 
                                 except Exception as e:
                                     logger.error(f"Error registering contact: {str(e)}")
