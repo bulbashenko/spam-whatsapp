@@ -91,9 +91,11 @@ async def process_place_details(
             if not details or not details.get("result"):
                 logger.error(f"No details found for place_id: {place_id}")
                 return None
-            
-            logger.info("\n\n\n\n\n\n\n\n DETAILS: \n\n\n\n\n\n\n\n")
-            logger.info(details['result']['social_media'])
+            try:
+                logger.info("\n\n\n\n\n\n\n\n DETAILS: \n\n\n\n\n\n\n\n")
+                logger.info(details)
+            except Exception as e:
+                logger.error(f"Error processing place data to social: {str(e)}")
                 
             # Cache the results
             await cache_place_details(place_id, details["result"])
