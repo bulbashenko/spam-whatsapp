@@ -32,7 +32,7 @@ async def create_contact(
     new_contact = Contact(
         email=contact_data.email,
         name=contact_data.name,
-        phone_number=contact_data.phone_number
+        phone=contact_data.phone_number
     )
     
     db.add(new_contact)
