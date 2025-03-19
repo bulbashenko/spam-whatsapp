@@ -20,15 +20,18 @@ async def create_contact(
     contact_data: schemas.ContactCreate,
     db: AsyncSession = Depends(get_db_session)
 ):
-    stmt = select(Contact).where(Contact.email == contact_data.email)
+    stmt = select(Contact).where(
+        (Contact.email == contact_data.email) | (Contact.phone == contact_data.phone)
+    )
     result = await db.execute(stmt)
     existing_contact = result.scalar_one_or_none()
+
     if existing_contact:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Contact with this email already exists"
+            detail="A contact with this email or phone number already exists"
         )
-    
+
     new_contact = Contact(
         email=contact_data.email,
         name=contact_data.name,
