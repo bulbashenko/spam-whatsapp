@@ -206,7 +206,8 @@ class GooglePlacesService:
             "weekday_text": place_data.get("opening_hours", {}).get("weekday_text", []),
             "reviews": place_data.get("reviews", []),
             "url": place_data.get("url"),
-            "raw_data": place_data
+            "raw_data": place_data,
+            "social_media": place_data.get("social_media")
         }
 
         if not location:
