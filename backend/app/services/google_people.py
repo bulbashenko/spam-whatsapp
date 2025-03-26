@@ -61,12 +61,12 @@ class GooglePeopleService:
         # Check for missing credentials before attempting refresh
         if not self.client_id:
             from app.core.config import settings
-            self.client_id = settings.GOOGLE_OAUTH_CLIENT_ID="REMOVED"
+            self.client_id = settings.GOOGLE_OAUTH_CLIENT_ID
             logger.info(f"Using client_id from settings: {self.client_id[:10]}...")
             
         if not self.client_secret:
             from app.core.config import settings
-            self.client_secret = settings.GOOGLE_OAUTH_CLIENT_SECRET="REMOVED"
+            self.client_secret = settings.GOOGLE_OAUTH_CLIENT_SECRET
             logger.info("Using client_secret from settings")
             
         if not self.client_id:

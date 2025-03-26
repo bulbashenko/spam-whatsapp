@@ -12,44 +12,44 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Business Search API"
     
-    SECRET_KEY="REMOVED": str = "secret"
+    SECRET_KEY: str = "[REMOVED]"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     
     # Google Places API
-    GOOGLE_PLACES_API_KEY="REMOVED": str
+    GOOGLE_PLACES_API_KEY: str
     
     # Google OAuth settings for People API
     # Hardcoded temporarily as requested, to be moved to .env later
-    GOOGLE_OAUTH_CLIENT_ID="REMOVED": str = "112719833747-hmrmjg9clho50co4noh3if7k8kj2gbql.apps.googleusercontent.com"
-    GOOGLE_OAUTH_CLIENT_SECRET="REMOVED": str = "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"
+    GOOGLE_OAUTH_CLIENT_ID: str = "[REMOVED]"
+    GOOGLE_OAUTH_CLIENT_SECRET: str = "[REMOVED]"
     GOOGLE_OAUTH_REDIRECT_URI: str = "https://moton.agency/api/v1/google/auth/callback"
     
     POSTGRES_SERVER: str
     POSTGRES_USER: str
-    POSTGRES_PASSWORD="REMOVED": str
+    POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     POSTGRES_PORT: str
     
     
     # SERAPI KEY
-    SERPER_API_KEY="REMOVED": str
+    SERPER_API_KEY: str
     
     @computed_field
     def POSTGRES_DATABASE_URL(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD="REMOVED"}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     # Redis settings
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
-    REDIS_PASSWORD="REMOVED": Optional[str] = None
+    REDIS_PASSWORD: Optional[str] = None
     REDIS_SOCKET_TIMEOUT: int = 30
     REDIS_SOCKET_CONNECT_TIMEOUT: int = 30
     
     # Celery settings
     @computed_field
     def CELERY_BROKER_URL(self) -> str:
-        auth = f":{self.REDIS_PASSWORD="REMOVED"}@" if self.REDIS_PASSWORD="REMOVED" else "@"
+        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else "@"
         return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
     
     @computed_field

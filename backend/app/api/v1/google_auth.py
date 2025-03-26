@@ -24,12 +24,12 @@ async def get_google_auth_url(
     from app.core.config import settings
     
     # Log the OAuth configuration for debugging
-    logger.info(f"Google OAuth Configuration - Client ID: '{settings.GOOGLE_OAUTH_CLIENT_ID="REMOVED"}'")
+    logger.info(f"Google OAuth Configuration - Client ID: '{settings.GOOGLE_OAUTH_CLIENT_ID}'")
     logger.info(f"Google OAuth Configuration - Redirect URI: '{settings.GOOGLE_OAUTH_REDIRECT_URI}'")
     
     # Verify client_id is not empty
-    if not settings.GOOGLE_OAUTH_CLIENT_ID="REMOVED":
-        logger.error("GOOGLE_OAUTH_CLIENT_ID="REMOVED" is empty or not set")
+    if not settings.GOOGLE_OAUTH_CLIENT_ID:
+        logger.error("GOOGLE_OAUTH_CLIENT_ID is empty or not set")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="OAuth client ID not configured"
@@ -37,7 +37,7 @@ async def get_google_auth_url(
     
     state = current_user.id  # Use user ID as state to verify callback
     auth_url = GooglePeopleService.generate_oauth_url(
-        client_id=settings.GOOGLE_OAUTH_CLIENT_ID="REMOVED",
+        client_id=settings.GOOGLE_OAUTH_CLIENT_ID,
         redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI,
         state=state
     )
@@ -85,19 +85,19 @@ async def google_auth_callback(
         from app.core.config import settings
         
         # Log the OAuth configuration for callback
-        logger.info(f"Google OAuth Callback - Client ID: '{settings.GOOGLE_OAUTH_CLIENT_ID="REMOVED"}'")
+        logger.info(f"Google OAuth Callback - Client ID: '{settings.GOOGLE_OAUTH_CLIENT_ID}'")
         logger.info(f"Google OAuth Callback - Redirect URI: '{settings.GOOGLE_OAUTH_REDIRECT_URI}'")
         
         # Verify client credentials are not empty
-        if not settings.GOOGLE_OAUTH_CLIENT_ID="REMOVED":
-            logger.error("GOOGLE_OAUTH_CLIENT_ID="REMOVED" is empty or not set during callback")
+        if not settings.GOOGLE_OAUTH_CLIENT_ID:
+            logger.error("GOOGLE_OAUTH_CLIENT_ID is empty or not set during callback")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="OAuth client ID not configured"
             )
             
-        if not settings.GOOGLE_OAUTH_CLIENT_SECRET="REMOVED":
-            logger.error("GOOGLE_OAUTH_CLIENT_SECRET="REMOVED" is empty or not set during callback")
+        if not settings.GOOGLE_OAUTH_CLIENT_SECRET:
+            logger.error("GOOGLE_OAUTH_CLIENT_SECRET is empty or not set during callback")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="OAuth client secret not configured"
@@ -107,8 +107,8 @@ async def google_auth_callback(
         
         tokens = await GooglePeopleService.exchange_code_for_tokens(
             code=code,
-            client_id=settings.GOOGLE_OAUTH_CLIENT_ID="REMOVED",
-            client_secret=settings.GOOGLE_OAUTH_CLIENT_SECRET="REMOVED",
+            client_id=settings.GOOGLE_OAUTH_CLIENT_ID,
+            client_secret=settings.GOOGLE_OAUTH_CLIENT_SECRET,
             redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI
         )
         

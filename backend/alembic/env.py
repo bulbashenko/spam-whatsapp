@@ -21,7 +21,7 @@ from app.models import user, business_data, business_search, whatsapp  # Import 
 config = context.config
 
 # Create synchronous URL for migrations
-sync_url = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD="REMOVED"}@{settings.POSTGRES_SERVER}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+sync_url = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_SERVER}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
 config.set_main_option("sqlalchemy.url", sync_url)
 
 # Interpret the config file for Python logging.

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class GooglePlacesService:
     def __init__(self):
-        self.api_key = settings.GOOGLE_PLACES_API_KEY="REMOVED"
+        self.api_key = settings.GOOGLE_PLACES_API_KEY
         self.base_url = "https://maps.googleapis.com/maps/api/place"
         self.retry_count = 3
         self.retry_delay = 1

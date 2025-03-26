@@ -1,0 +1,31 @@
+image: atlassian/default-image:latest
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Deploy to Server
+          script:
+            - apt-get update && apt-get install -y sshpass
+            - echo "Deploying to server..."
+            - |
+              sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP '
+                set -e
+                if [ ! -d backend ]; then
+                  echo "Error: Backend directory not found" && exit 1
+                fi
+                cd backend
+                docker-compose down
+                git fetch --all
+                git reset --hard origin/main
+                docker system prune -f
+                docker-compose up --build -d
+              '
+            - echo "Deployed to server"
+          services:
+            - docker
+
+definitions:
+  services:
+    docker:
+      memory: 3027

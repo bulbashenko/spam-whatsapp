@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 try:
     redis = aioredis.from_url(
         f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
-        password=settings.REDIS_PASSWORD="REMOVED",
+        password=settings.REDIS_PASSWORD,
         encoding="utf-8",
         decode_responses=True,
         socket_timeout=settings.REDIS_SOCKET_TIMEOUT,

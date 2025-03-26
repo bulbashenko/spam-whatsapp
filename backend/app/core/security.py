@@ -32,7 +32,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY="REMOVED", algorithm="HS256")
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
 
@@ -47,7 +47,7 @@ async def get_current_user(
     )
     
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY="REMOVED", algorithms=["HS256"])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         email: str = payload.get("email")
         if email is None:
             raise credentials_exception

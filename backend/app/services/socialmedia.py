@@ -4,7 +4,7 @@ from app.core.config import settings
 
 class SocialMediaService:
     def __init__(self, *args, **kwargs):
-        self.api_key = settings.SERPER_API_KEY="REMOVED"
+        self.api_key = settings.SERPER_API_KEY
         self.url = "https://google.serper.dev/search"
 
     def search_social_profiles(self, company_name):
